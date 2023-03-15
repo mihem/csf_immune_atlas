@@ -1,6 +1,4 @@
-#################################################################################################################
-#load libraries
-#################################################################################################################
+# load libraries ------------------------------------------
 library(tidyverse)
 library(pheatmap)
 library(corrplot)
@@ -16,26 +14,23 @@ library(qs)
 
 source("ml_izkf_utils.R")
 project <- "relative"
-#################################################################################################################
-#color palette
-#################################################################################################################
+
+# color palette ------------------------------------------
 phmap_colors <- colorRampPalette(rev(brewer.pal(n = 8, name = "RdBu")))(100) #nice colors for pheatmap
 
 #large sequential color palette
 set.seed(123)
 my_cols <- unname(createPalette(60, RColorBrewer::brewer.pal(8, "Set2")))
 
-#################################################################################################################
-# section read in final data for analysis
-#################################################################################################################
+# section read in final data for analysis ------------------------------------------
 all_data_one_fil <- qs::qread("final_one_rel.qs")
 
 csf_data <- all_data_one_fil$csf
 blood_data <- all_data_one_fil$blood
 
-#all_data_one_complete <- qs::qread("final_one_rel_complete.qs")
-#csf_data_complete <- all_data_one_complete$csf
-#blood_data_complete <- all_data_one_complete$blood
+all_data_one_complete <- qs::qread("final_one_rel_complete.qs")
+csf_data_complete <- all_data_one_complete$csf
+blood_data_complete <- all_data_one_complete$blood
 
 all_data_norm_complete <- qs::qread("final_one_rel_norm_complete.qs")
 csf_norm_complete <- all_data_norm_complete$csf
@@ -46,12 +41,9 @@ combined_norm_complete <- qs::qread("final_one_rel_combined_norm_complete.qs")
 sum(all_data_one_fil$blood$event_count) #1313 million events
 sum(all_data_one_fil$csf$event_count)# 233 million events
 # combined over 1,5 billion events after filtering
-
 csf_umap_full <- qs::qread("final_one_rel_umap.qs")
 
-#################################################################################################################
-# section read in processed but unfiltered, unadjusted data
-#################################################################################################################
+# section read in processed but unfilter  ------------------------------------------
 #all_data duplicate (measure date repeated) removed, but multiple measurements of one patients kept
 #all_data_one only one measurement per patient kept
 #patient_id - same for each patient, but blood/CSF
@@ -68,50 +60,47 @@ all_data |>
     dplyr::count(patient_id) |>
     arrange(desc(n))
 
-all_data |>
-    dplyr::filter(patient_id == "122201") |>
-    print(width = Inf)
-
-
-skimr::skim(all_data)
-
 subfolders <- file.path("analysis", "relative", c("qc", "categories", "correlation", "boxplot", "heatmap", "umap"))
 lapply(subfolders, dir.create, recursive = TRUE)
 
-#################################################################################################################
-# section filter data
-#################################################################################################################
-ggplot(all_data_one, aes(x = harvest_volume, y = event_count, color = tissue)) +
+# filter based on admission date ------------------------------------------
+# remove all without aufnahme date (loose around 1000 samples)
+# calculate difference between measure date and admission date
+# take absolute value (3 times small negative values becase of technical errors)
+all_data_one_filter_v1 <-
+  all_data_one |>
+  tidyr::drop_na(aufnahme, measure_date_orbis) |>
+  dplyr::mutate(aufnahme = lubridate::as_date(aufnahme)) |>
+  dplyr::mutate(lp_interval = abs(as.double(difftime(measure_date_orbis, aufnahme, units = "days")))) |>
+  dplyr::filter(lp_interval < 8)
+
+# section filter data ------------------------------------------
+ggplot(all_data_one_filter_v1, aes(x = harvest_volume, y = event_count, color = tissue)) +
     geom_point(size = 0.1) +
     scale_x_log10() +
     scale_y_log10() +
     theme_bw()
 ggsave(file.path("analysis", "relative", "qc", "harvest_volume_event_counts.pdf"), width = 5, height = 5)
 
-ggplot(all_data_one, aes(event_count, fill = tissue))+
-    geom_histogram(data = dplyr::filter(all_data_one, tissue == "CSF"), fill = "blue", bins = 100, alpha = 0.2)+
-    geom_histogram(data = dplyr::filter(all_data_one, tissue == "blood"), fill = "red", bins = 100, alpha = 0.2)+
-    scale_x_log10()+
-    scale_y_log10()+
-    geom_vline(aes(xintercept = 3000))+
-    geom_vline(aes(xintercept = 7000))+
+ggplot(all_data_one_filter_v1, aes(event_count, fill = tissue)) +
+    geom_histogram(data = dplyr::filter(all_data_one_filter_v1, tissue == "CSF"), fill = "blue", bins = 100, alpha = 0.2) +
+    geom_histogram(data = dplyr::filter(all_data_one_filter_v1, tissue == "blood"), fill = "red", bins = 100, alpha = 0.2) +
+    scale_x_log10() +
+    scale_y_log10() +
+    geom_vline(aes(xintercept = 3000)) +
+    geom_vline(aes(xintercept = 7000)) +
     theme_bw()
 ggsave(file.path("analysis", "relative", "qc", "cutoff_event_count.pdf"), width = 5, height = 5)
 
 #filter out if event_count below 3000 for CSF -> 155 removed
 #filter out if event_count below 5000 for blood -> 51 removed
-all_data_one_fil <-
-    all_data_one |>
+all_data_one_filter_v2 <-
+    all_data_one_filter_v1 |>
     dplyr::filter(!(event_count < 3000 & tissue == "CSF")) |>
     dplyr::filter(!(event_count < 7000 & tissue == "blood"))
 
-all_data_one_fil |>
-    count(dx_icd_level1) |>
-    arrange(desc(n)) |>
-    write_csv(file.path("analysis", "relative", "qc", "filter_event_counts_categories.csv"))
-
 csf_data <-
-    all_data_one_fil |>
+    all_data_one_filter_v2 |>
     dplyr::filter(tissue == "CSF") |>
     dplyr::mutate(OCB = ifelse(OCB == 2 | OCB == 3, 1, 0))
 
@@ -120,7 +109,7 @@ csf_naive_data <-
     dplyr::filter(tx_biobanklist == "naive")
 
 blood_data <-
-    all_data_one_fil |>
+    all_data_one_filter_v2 |>
     dplyr::filter(tissue == "blood") |>
     select(where(function(x) !all(is.na(x))))
 
@@ -255,28 +244,39 @@ cor(csf_data$OCB, csf_data$plasma, use = "complete.obs", method = "spearman")
 #################################################################################################################
 #impute data using the mice package and pmm method
 #csf
-csf_data_mice <- select(csf_data, dx_icd_level2, patient_id:lactate, geschlecht, age)
+csf_data_mice <- select(csf_data, dx_icd_level2, dx_andi_level2, patient_id:lactate, geschlecht, age)
 
 skimr::skim(csf_data_mice)
 mice::md.pattern(csf_data_mice)
 
 #better to use complete model (mice guide), beside dx_icd_level2 low correlation
-predictor_matrix_csf <- mice::quickpred(csf_data_mice,
-  #                                      exclude = c("dx_icd_level2", "patient_id", "sample_pair_id", "tissue"),
-                                        mincor = 0.1,
-                                        method = "spearman")
+predictor_matrix_csf <-
+  mice::quickpred(csf_data_mice,
+                  mincor = 0.1,
+                  method = "pearson")
 
-csf_data_impute <- mice(csf_data_mice,
-                        m = 5,
-                        maxit = 5,
-                        meth = "pmm",
-                        seed = 123,
-                        predictorMatrix = predictor_matrix_csf)
+as.data.frame(predictor_matrix_csf) |> 
+  dplyr::select(cell_count)
+
+csf_data_impute <- mice(
+  csf_data_mice,
+  m = 5,
+  maxit = 5,
+  meth = "pmm",
+  seed = 123,
+  predictorMatrix = predictor_matrix_csf
+)
+
+skimr::skim(mice::complete(csf_data_impute, 3))
 
 #sanity checks
 csf_data_impute |>
-    dplyr::filter(dx_icd_level2 == "multiple sclerosis") |>
-    stripplot(dx_icd_level2, pch = 19, cex = .5)
+    dplyr::filter(dx_icd_level2 == "bacterial meningitis") |>
+    stripplot(cell_count, pch = 19, cex = .5)
+
+csf_data_impute |>
+    dplyr::filter(dx_andi_level2 == "bacterial meningitis") |>
+    stripplot(cell_count, pch = 19, cex = .5)
 
 csf_data_impute |>
     dplyr::filter(dx_icd_level2 == "multiple sclerosis") |>
@@ -293,6 +293,22 @@ csf_data |>
 mice::complete(csf_data_impute,3) |>
     dplyr::filter(dx_icd_level2 == "multiple sclerosis") |>
     summarize(mean_ocb = mean(OCB, na.rm = TRUE))
+
+mice::complete(csf_data_impute, 5) |>
+  dplyr::filter(dx_andi_level2 == "bacterial meningitis") |>
+  dplyr::select(cell_count)
+
+csf_data |> 
+  dplyr::filter(dx_andi_level2 == "bacterial meningitis") |>
+  dplyr::select(first_name_orbis, last_name_orbis, measure_date_orbis, cell_count, lactate, glucose_CSF, granulos_basic, granulos) |> 
+  print(n = Inf)
+
+names(csf_data)
+
+all_data |> 
+  dplyr::filter(last_name_orbis == "Köster") |> 
+  dplyr::filter(first_name_orbis == "Kriemhild")
+
 
 csf_data |>
     dplyr::filter(dx_icd_level2 == "multiple sclerosis") |>
@@ -932,6 +948,14 @@ ggsave(file.path("analysis", "relative", "umap", "csf_umap_cluster_kmeans.pdf"),
 categories <- c("dx_icd_level1", "dx_icd_level2", "dx_biobanklist_level1", "dx_biobanklist_level2", "dx_andi_level1", "dx_andi_level2", "dx_andi_level3")
 lapply(categories, FPlot_dx, data = csf_umap_full)
 
+
+
+csf_umap_naive <- 
+  csf_umap_full |> 
+  dplyr::filter(tx_biobanklist == "naive") 
+  
+FPlot_dx(data = csf_umap_naive, "dx_icd_level2")
+
 #plot factors
 csf_umap_full$OCB <- factor(csf_umap_full$OCB, labels = c("no", "yes"))
 FPlot(feature = "OCB", data = csf_umap_full, scale = "cont", size = .2, alpha = 0.5)
@@ -1120,13 +1144,32 @@ ggsave(file.path("analysis", "relative", "top", "top_dotplot_umap_csf_quickmarke
 ## ggsave(file.path("analysis", "concentration", "dotplot", "umap_csf_lasso_dotplot.pdf"), width = 4, height = 7)
 
 
-#####################################################################################################
-# UMAP csf outlier
-####################################################################################################
-csf_umap_full |>
-    dplyr::filter(dx_andi_level2 == "bacterial meningitis") |> 
-    dplyr::filter(cluster == 4)   |> 
-    dplyr::select(measure_date, pid, first_name_orbis, last_name_orbis, birthdate_orbis, cell_count)
+# umap csf outlier --------------------------------------------------------
+csf_outlier <-
+  csf_umap_full |> 
+  dplyr::filter(dx_andi_level2 == "bacterial meningitis") |>
+  dplyr::filter(cluster == 2) %>%
+  dplyr::select(first_name_orbis, last_name_orbis, birthdate_orbis, measure_date_orbis)
+  
+
+names(csf_outlier)
+
+FPlot(feature = "cluster", data = csf_outlier, scale = "cluster", size = 0.1, alpha = 0.5)
+
+csf_data |> 
+  dplyr::filter(dx_andi_level2 == "bacterial meningitis") |> 
+  dplyr::filter(tx_biobanklist == "naive") |> 
+  dplyr::select(tx_biobanklist, last_name_orbis, first_name_orbis, measure_date_orbis, cell_count)
+  print(n = Inf)
+
+
+names(csf_data)
+
+csf_data_complete |> 
+  dplyr::filter(dx_andi_level2 == "bacterial meningitis") |> 
+  dplyr::select(last_name_orbis, first_name_orbis, measure_date_orbis, cell_count, granulos_basic, protein_CSF, glucose_CSF, lactate, granulos) |> 
+  writexl::write_xlsx("outlier_bacterial_meningitis.xlsx")
+
 
 #################################################################################################################
 ################################### UMAP CSF supervised ## not much better even with high target weights
@@ -1147,7 +1190,6 @@ csf_umap_full |>
 ## FPlot(feature = "cluster", data = csf_umap_full_sup, scale = "cluster")
 ## ggsave(file.path("analysis", "relative", "csf_sup_umap_cluster.pdf"), width = 6, height = 5)
 
-read_csv("f")
 ## #plot umap variables supervised
 ## umap_variables <- names(csf_norm_complete)[!names(csf_norm_complete) %in% c("OCB", "category")]
 ## csf_umap_fplots_sup <- lapply(umap_variables, FPlot, data = csf_umap_full_sup, scale = "con")
@@ -1188,6 +1230,7 @@ cl_blood_kmeans <- blood_norm_complete |>
 #combine umap, cluster and metadata
 blood_umap_full <- bind_cols(blood_umap, blood_norm_complete, cluster = factor(cl_blood_kmeans$cluster))
 
+
 ##############################################################################################################
 # section feature plots umap blood
 ##############################################################################################################
@@ -1203,7 +1246,7 @@ lapply(categories, FPlot_dx, data = blood_umap_full)
 umap_blood_variables <-
     blood_umap_full |>
     select(granulos:HLA_DR_T) |>
-    names()
+    names() 
 
 blood_umap_fplots <- lapply(umap_blood_variables, FPlot, data = blood_umap_full, scale = "con", size = 0.1, alpha = .5)
 
