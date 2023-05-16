@@ -252,6 +252,45 @@ print(phmap_group)
 dev.off()
 }
 
+#function to create heatmap for grouped mean of combined data with ratios
+heatmap_group <-
+  function(category, data, vars, label, cutree_rows, height, transform = FALSE, cutree_cols = 8) {
+    formula <- paste0(category, "~", ".")
+    data_interest <- data[c(category, vars)]
+    phmap_data_norm <- data_interest |>
+      ## select(.data[[category]], granulos:lactate) |>
+      drop_na(.data[[category]]) |>
+      recipes::recipe(as.formula(formula)) |>
+      bestNormalize::step_orderNorm(recipes::all_numeric()) |>
+      recipes::prep() |>
+      recipes::bake(new_data = NULL) |>
+      dplyr::group_by(.data[[category]])  |>
+      dplyr::summarize(across(all_of(vars), function(x) mean(x, na.rm = TRUE))) |>
+      tibble::column_to_rownames(var = category)
+
+if(transform == TRUE) {
+    phmap_data_norm <- t(phmap_data_norm)
+}
+
+phmap_group <- pheatmap::pheatmap(phmap_data_norm,
+        color = phmap_colors,
+        scale = "none",
+        main = label,
+        cellwidth = 10,
+        cellheight = 10,
+        treeheight_row = 30,
+        treeheight_col = 30,
+        cutree_cols = cutree_cols,
+        cutree_rows = cutree_rows,
+        clustering_distance_cols = "euclidean",
+        clustering_distance_rows = "euclidean",
+        clustering_method = "ward.D2",
+        border_color = NA
+         )
+grDevices::cairo_pdf(file.path("analysis", project, "heatmap", glue::glue("hmap_{label}_{category}.pdf")), width = 15, height = height)
+print(phmap_group)
+dev.off()
+}
 #volcano plot
 volPlot <- function(data, cl_interest) {
     fc <- 
