@@ -10,6 +10,8 @@ library(bestNormalize)
 library(mice)
 library(skimr)
 library(qs)
+library(SoupX)
+library(ICD10gm)
 
 source("ml_izkf_utils.R")
 project <- "relative"
@@ -37,10 +39,11 @@ blood_norm_complete <- all_data_norm_complete$blood
 
 combined_norm_complete <- qs::qread("final_one_rel_combined_norm_complete.qs")
 
+combined_ratio <- qs::qread("combined_ratio.qs")
+
 sum(all_data_one_fil$blood$event_count) #1313 million events
 sum(all_data_one_fil$csf$event_count)# 233 million events
 # combined over 1,5 billion events after filtering
-csf_umap_full <- qs::qread("final_one_rel_umap.qs")
 
 # section read in processed but unfilter  ------------------------------------------
 #all_data duplicate (measure date repeated) removed, but multiple measurements of one patients kept
@@ -207,6 +210,9 @@ csf_data_mice <- select(csf_data, dx_icd_level1:dx_andi_level3, patient_id:lacta
 
 names(csf_data)
 skimr::skim(csf_data_mice)
+skimr::skim(csf_data_mice$albumin_CSF)
+skimr::skim(csf_data_mice$albumin_serum)
+skimr::skim(csf_data_mice$albumin_ratio)
 mice::md.pattern(csf_data_mice)
 
 #better to use complete model (mice guide), beside dx_icd_level2 low correlation
@@ -411,6 +417,25 @@ combined_norm_complete |>
 ggsave(file.path("analysis", "relative", "qc", "histogram_combined_norm_imputed.pdf"), width = 10, height = 30)
 
 qs::qsave(combined_norm_complete, "final_one_rel_combined_norm_complete.qs")
+
+
+# normalize combined blood csf with ratios ------------------------------------------
+combined_ratio_norm <-
+  combined_ratio |>
+  recipes::recipe(sample_pair_id ~ .) |>
+  bestNormalize::step_orderNorm(c(granulos_CSF:albumin_ratio, granulos_ratio_norm:IgM_ratio_norm)) |>
+  recipes::prep() |>
+  recipes::bake(new_data = NULL)
+
+combined_ratio_norm |>
+    dplyr::select(c(granulos_CSF:albumin_ratio, granulos_ratio_norm:IgM_ratio_norm)) |>
+    pivot_longer(everything(), names_to = "variable", values_to = "value") |>
+    ggplot(aes(x=value))+
+    geom_histogram(bins = 50) +
+    facet_wrap(vars(variable), scales = "free", ncol = 4)
+ggsave(file.path("analysis", "relative", "qc", "histogram_combined_norm_ratio.pdf"), width = 10, height = 30)
+
+qs::qsave(combined_ratio_norm, "combined_ratio_norm.qs")
 
 # section heatmap grouped CSF  ------------------------------------------
 #first normalize then mean
@@ -675,8 +700,12 @@ ggsave(file.path("analysis", "relative", "feature", "fplot_var_csf_umap_age.png"
 # section abundance umap csf ------------------------------------------
 lapply(categories, dotPlot_cluster, data = csf_umap_full)
 
+debugonce(barPlotCluster)
+barPlotCluster(data = csf_umap_full, category = "dx_icd_level2")
+
 # save umap csf ------------------------------------------
 qs::qsave(csf_umap_full, "final_one_rel_umap_csf.qs")
+## csf_umap_full <- qs::qread("final_one_rel_umap_csf.qs")
 
 # section topmarkers for clusters csf
 
@@ -708,48 +737,37 @@ fc_wilcox_csf |>
 
 ggsave(file.path("analysis", "relative", "top", "top_dotplot_umap_csf_wilcox.pdf"), width = 4, height = 7)
 
-#quickmarkers
+#use SoupX to determine abundance in clusters
+# because it's based on gene expression it binarized gene expression (here already binarized, so expressCut does not matter here)
+csf_dx_icd_level2_matrix <-
+  csf_umap_full |>
+  select(dx_icd_level2) |>
+  recipes::recipe(dx_icd_level2 ~ .) |>
+  recipes::step_dummy(dx_icd_level2) |>
+  recipes::prep() |>
+  recipes::bake(new_data = NULL) |>
+  as.matrix() |>
+  t()
+
+abundance_csf_soupx <-
+  SoupX::quickMarkers(csf_dx_icd_level2_matrix, csf_umap_full$cluster, FDR = 0.1, N = 100, expressCut = 0.9) |>
+  tibble()
+
+lapply(as.character(1:8), abundanceCategoryPlot, data = abundance_csf_soupx)
+
+#find top markers
 csf_matrix <-
     csf_umap_full |>
     select(granulos:lactate) |>
     as.matrix() |>
     t()
 
-quickmarkers_res <- SoupX::quickMarkers(csf_matrix, csf_umap_full$cluster, FDR = 0.01, N = 100, expressCut = 0.9) |>
+quickmarkers_csf_var <- SoupX::quickMarkers(csf_matrix, csf_umap_full$cluster, FDR = 0.1, N = 100, expressCut = 0.9) |>
     tibble()
 
-#order of variables using hclust
-quickmarkers_order <-
-    quickmarkers_res |>
-    dplyr::select(gene, cluster, tfidf)|>
-    dplyr::mutate(cluster = paste0("cl", cluster))|>
-    pivot_wider(names_from = "cluster", values_from = "tfidf")|>
-    dplyr::mutate(combined = coalesce(cl1, cl2, cl3, cl4, cl5, cl6, cl7, cl8), .before = 1) |>
-#    select(combined, gene) |>
-    column_to_rownames("gene") |>
-    dist(method = "euclidean") |>
-    hclust("ward.D2")
+topBarPlot(data = quickmarkers_csf_var, cluster = "1")
+lapply(as.character(1:8), topBarPlot, data = quickmarkers_csf_var, tfidf_cut = 0.4, qval_cutoff = 0.001)
 
-#dotplot quickmarkers
-quickmarkers_res |>
-    dplyr::select(gene, cluster, tfidf, qval) |>
-    dplyr::rename(variable = gene) |>
-    dplyr::mutate(cluster = factor(cluster, levels = as.character(1:8)))|>
-#   dplyr::mutate(variable = fct_rev(factor(variable))) |>
-    dplyr::mutate(variable = factor(variable, levels = quickmarkers_order$labels[quickmarkers_order$order])) |>
-    dplyr::mutate(qval = if_else(qval < 1e-320, 1e-320, qval)) |>
-    dplyr::mutate(qval = -log10(qval)) |>
-    dplyr::filter(tfidf > 0.4) |>
-    dplyr::mutate(qval > -log10(0.05)) |>
-    ggplot(aes(x = cluster, y = variable, size = tfidf, color = qval)) +
-    geom_point() +
-#    scale_size_area() +
-#    scale_color_manual(values = phmap_colors) +
-    viridis::scale_color_viridis() +
-    theme_classic() +
-    theme(panel.border = element_rect(color = "black", size = 1, fill = NA))
-
-ggsave(file.path("analysis", "relative", "top", "top_dotplot_umap_csf_quickmarkers.pdf"), width = 3.5, height = 8)
 
 ## # umap csf outlier --------------------------------------------------------
 ## csf_outlier <-
@@ -948,7 +966,24 @@ FPlot(feature = "age", data = combined_umap_full, scale = "con", size = 0.3, alp
 ggsave(file.path("analysis", "relative", "feature", "fplot_var_combined_umap_age.png"), width = 2.5, height = 2)
 
 #  section abundance umap combined ------------------------------------------
-lapply(categories, dotPlot_cluster, data = combined_umap_full)
+## lapply(categories, dotPlot_cluster, data = combined_umap_full)
+
+#use SoupX to determine abundance in clusters
+combined_dx_icd_level2_matrix <-
+  combined_umap_full |>
+  select(dx_icd_level2) |>
+  recipes::recipe(dx_icd_level2 ~ .) |>
+  recipes::step_dummy(dx_icd_level2) |>
+  recipes::prep() |>
+  recipes::bake(new_data = NULL) |>
+  as.matrix() |>
+  t()
+
+abundance_combined_soupx <-
+  SoupX::quickMarkers(combined_dx_icd_level2_matrix, combined_umap_full$cluster, FDR = 0.1, N = 100, expressCut = 0.9) |>
+  tibble()
+
+lapply(as.character(1:8), abundanceCategoryPlot, data = abundance_combined_soupx)
 
 #  section topmarkers for clusters combined ------------------------------------------
 #quickmarkers
@@ -958,27 +993,147 @@ combined_matrix <-
     as.matrix() |>
     t()
 
-quickmarkers_res_combined <- SoupX::quickMarkers(combined_matrix, combined_umap_full$cluster, FDR = 0.01, N = 100, expressCut = 0.9) |>
+quickmarkers_combined_var <- SoupX::quickMarkers(combined_matrix, combined_umap_full$cluster, FDR = 0.1, N = 100, expressCut = 0.9) |>
+    tibble()
+
+lapply(as.character(1:8), topBarPlot, data = quickmarkers_combined_var, tfidf_cut = 0.4, qval_cutoff = 0.001)
+
+## quickmarkers_res_combined <- SoupX::quickMarkers(combined_matrix, combined_umap_full$cluster, FDR = 0.01, N = 100, expressCut = 0.9) |>
+##     tibble()
+
+## # order of variables using hclust
+## quickmarkers_order_combined <-
+##     quickmarkers_res_combined |>
+##     dplyr::select(gene, cluster, tfidf) |>
+##     dplyr::mutate(cluster = paste0("cl", cluster)) |>
+##     pivot_wider(names_from = "cluster", values_from = "tfidf") |>
+##     ## dplyr::mutate(combined = coalesce(cl1, cl2, cl3, cl4, cl5, cl6, cl7, cl8), .before = 1)
+##     dplyr::mutate(combined = do.call(coalesce, across(where(is.numeric))), .before = 1) |>
+##     column_to_rownames("gene") |>
+##     dist(method = "euclidean") |>
+##     hclust("ward.D2")
+
+## #dotplot quickmarkers
+## quickmarkers_res_combined |>
+##     dplyr::select(gene, cluster, tfidf, qval) |>
+##     dplyr::rename(variable = gene) |>
+##     dplyr::mutate(cluster = factor(cluster, levels = as.character(1:length(cluster))))|>
+##     dplyr::mutate(variable = factor(variable, levels = quickmarkers_order_combined$labels[quickmarkers_order_combined$order])) |>
+##     dplyr::mutate(qval = if_else(qval < 1e-320, 1e-320, qval)) |>
+##     dplyr::mutate(qval = -log10(qval)) |>
+##     dplyr::filter(tfidf > 0.5) |>
+##     dplyr::mutate(qval > -log10(0.05)) |>
+##     ggplot(aes(x = cluster, y = variable, size = tfidf, color = qval)) +
+##     geom_point() +
+## #    scale_size_area() +
+##     viridis::scale_color_viridis() +
+##     theme_classic() +
+##     theme(panel.border = element_rect(color = "black", size = 1, fill = NA))
+
+## ggsave(file.path("analysis", "relative", "top", "top_dotplot_umap_combined_quickmarkers.pdf"), width = 4, height = 7)
+
+
+# save umap combined ------------------------------------------
+qs::qsave(combined_umap_full, "final_one_rel_umap_combined.qs")
+
+#  section UMAP COMBINED_RATIO  ------------------------------------------
+set.seed(123)
+
+combined_ratio_umap <-
+  combined_ratio_norm |>
+    select(c(granulos_CSF:albumin_ratio, granulos_ratio_norm:IgM_ratio_norm)) |>
+    select(-OCB_CSF) |>
+    uwot::umap(scale = FALSE, pca = NULL, metric = "cosine", n_neighbors = 30, min_dist = 0.01) |>
+#    uwot::umap(scale = FALSE, pca = NULL, metric = "euclidean", n_neighbors = 30, min_dist = 0.01) |>
+    as_tibble() |>
+    rename(UMAP1 = V1, UMAP2 = V2)
+
+#kmeans clustering
+set.seed(123)
+cl_combined_ratio_kmeans <-
+  combined_ratio_norm |>
+      select(c(granulos_CSF:albumin_ratio, granulos_ratio_norm:IgM_ratio_norm)) |>
+    stats::kmeans(centers = 8, iter.max = 30, algorithm = "Hartigan-Wong")
+
+set.seed(123)
+cl_combined_ratio_phenograph <-
+    combined_ratio_norm_complete |>
+    select(granulos_CSF:lactate_CSF) |>
+    Rphenoannoy::Rphenoannoy(k = 20, trees = 150)
+
+#combine umap, cluster and metadata
+combined_ratio_umap_full <- bind_cols(combined_ratio_umap, combined_ratio_norm, cluster = factor(cl_combined_ratio_kmeans$cluster))
+## combined_ratio_umap_full <- bind_cols(combined_ratio_umap, combined_ratio_norm, cluster = factor(cl_combined_ratio_phenograph$community$membership))
+
+#  section feature plots umap combined_ratio ------------------------------------------
+#plot cluster
+FPlot(feature = "cluster", data = combined_ratio_umap_full, scale = "cluster", alpha = .5, size = 1)
+ggsave(file.path("analysis", "relative", "umap", "combined_ratio_umap_cluster_kmeans.pdf"), width = 6, height = 5)
+## ggsave(file.path("analysis", "relative", "umap", "combined_ratio_umap_cluster_phenograph.pdf"), width = 6, height = 5)
+
+#categories feature plots
+categories <- c("dx_icd_level1", "dx_icd_level2", "dx_biobanklist_level1", "dx_biobanklist_level2", "dx_andi_level1", "dx_andi_level2", "dx_andi_level3")
+lapply(categories, FPlot_dx, data = combined_ratio_umap_full)
+
+#plot factors
+combined_ratio_umap_full$OCB_CSF <- factor(combined_ratio_umap_full$OCB_CSF, labels = c("no", "yes"))
+FPlot(feature = "OCB_CSF", data = combined_ratio_umap_full, scale = "cont", size = .2, alpha = 0.5)
+ggsave(file.path("analysis", "relative", "feature", "fplot_var_combined_ratio_umap_ocb.png"), width = 3, height = 2)
+
+#plot umap variables
+umap_combined_ratio_variables <-
+  combined_ratio_umap_full |>
+  select(c(granulos_CSF:albumin_ratio, granulos_ratio_norm:IgM_ratio_norm)) |>
+  select(-OCB_CSF) |>
+  names()
+
+combined_ratio_umap_fplots <- lapply(umap_combined_ratio_variables, FPlot, data = combined_ratio_umap_full, scale = "con", size = 0.1, alpha = .5)
+plot1 <- patchwork::wrap_plots(combined_ratio_umap_fplots, ncol = 4)
+ggsave(file.path("analysis", "relative", "feature", "fplot_var_combined_ratio_umap_features.png"), plot = plot1, width = 25, height = 80, units = "cm", dpi = 300)
+
+#age
+FPlot(feature = "age", data = combined_ratio_umap_full, scale = "con", size = 0.3, alpha =.5)
+ggsave(file.path("analysis", "relative", "feature", "fplot_var_combined_ratio_umap_age.png"), width = 2.5, height = 5)
+
+#  section abundance umap combined_ratio ------------------------------------------
+lapply(categories, dotPlot_cluster, data = combined_ratio_umap_full)
+
+#  section topmarkers for clusters combined_ratio ------------------------------------------
+#quickmarkers
+combined_ratio_matrix <-
+  combined_ratio_umap_full |>
+  select(c(granulos_CSF:albumin_ratio, granulos_ratio_norm:IgM_ratio_norm)) |>
+  as.matrix() |>
+  t()
+
+quickmarkers_res_combined_ratio <-
+  SoupX::quickMarkers(
+    combined_ratio_matrix,
+    combined_ratio_umap_full$cluster,
+    FDR = 0.01,
+    N = 100,
+    expressCut = 0.9
+  ) |>
     tibble()
 
 # order of variables using hclust
-quickmarkers_order_combined <-
-    quickmarkers_res_combined |>
+quickmarkers_order_combined_ratio <-
+    quickmarkers_res_combined_ratio |>
     dplyr::select(gene, cluster, tfidf) |>
     dplyr::mutate(cluster = paste0("cl", cluster)) |>
     pivot_wider(names_from = "cluster", values_from = "tfidf") |>
-    ## dplyr::mutate(combined = coalesce(cl1, cl2, cl3, cl4, cl5, cl6, cl7, cl8), .before = 1)
-    dplyr::mutate(combined = do.call(coalesce, across(where(is.numeric))), .before = 1) |>
+    ## dplyr::mutate(combined_ratio = coalesce(cl1, cl2, cl3, cl4, cl5, cl6, cl7, cl8), .before = 1)
+    dplyr::mutate(combined_ratio = do.call(coalesce, across(where(is.numeric))), .before = 1) |>
     column_to_rownames("gene") |>
     dist(method = "euclidean") |>
     hclust("ward.D2")
 
 #dotplot quickmarkers
-quickmarkers_res_combined |>
+quickmarkers_res_combined_ratio |>
     dplyr::select(gene, cluster, tfidf, qval) |>
     dplyr::rename(variable = gene) |>
     dplyr::mutate(cluster = factor(cluster, levels = as.character(1:length(cluster))))|>
-    dplyr::mutate(variable = factor(variable, levels = quickmarkers_order_combined$labels[quickmarkers_order_combined$order])) |>
+    dplyr::mutate(variable = factor(variable, levels = quickmarkers_order_combined_ratio$labels[quickmarkers_order_combined_ratio$order])) |>
     dplyr::mutate(qval = if_else(qval < 1e-320, 1e-320, qval)) |>
     dplyr::mutate(qval = -log10(qval)) |>
     dplyr::filter(tfidf > 0.5) |>
@@ -990,20 +1145,12 @@ quickmarkers_res_combined |>
     theme_classic() +
     theme(panel.border = element_rect(color = "black", size = 1, fill = NA))
 
-ggsave(file.path("analysis", "relative", "top", "top_dotplot_umap_combined_quickmarkers.pdf"), width = 4, height = 7)
+ggsave(file.path("analysis", "relative", "top", "top_dotplot_umap_combined_ratio_quickmarkers.pdf"), width = 4, height = 9)
 
 
-# save umap combined ------------------------------------------
-qs::qsave(combined_umap_full, "final_one_rel_umap_combined.qs")
+# save umap combined_ratio ------------------------------------------
+qs::qsave(combined_ratio_umap_full, "final_one_rel_umap_combined_ratio.qs")
 
-#pull top 10 dx form icd level2
-top_dx_icd_level2 <-
-  combined_norm_complete |>
-  count(dx_icd_level2) |>
-  arrange(desc(n)) |>
-  dplyr::filter(!is.na(dx_icd_level2)) |>
-  slice(1:10) |>
-  pull(dx_icd_level2)
 
 ## #compare with andi
 ## freq_dx_icd_andi <-
@@ -1019,7 +1166,19 @@ top_dx_icd_level2 <-
 ##   column_to_rownames(var = "dx_icd_level2") |>
 ##   pheatmap()
 
-#compare with biobank, 1223
+
+
+
+
+# compare with biobank  ------------------------------------------
+top_dx_icd_level2 <-
+  combined_norm_complete |>
+  count(dx_icd_level2) |>
+  arrange(desc(n)) |>
+  dplyr::filter(!is.na(dx_icd_level2)) |>
+  slice(1:10) |>
+  pull(dx_icd_level2)
+
 freq_dx_icd_biobank <-
   combined_norm_complete |>
   dplyr::filter(dx_icd_level2 %in% top_dx_icd_level2) |>
@@ -1052,12 +1211,15 @@ dev.off()
 
 # CSF/blood ratios ------------------------------------------
 # use combined data, only keep if blood and CSF are both present
+# calculcate albumin ratio manually (otherwise imputed data might be used)
 # only keep if both CSF and blood are non-zero
 # join with meta data
 combined_ratio <-
   bind_rows(csf_data_complete, blood_data_complete) |>
   select(sample_pair_id, tissue, granulos:lactate) |>
   pivot_wider(names_from = tissue, values_from = granulos:lactate) |>
+  mutate(albumin_ratio = albumin_CSF_CSF/albumin_serum_CSF) |>
+  select(-albumin_ratio_CSF) |>
   select(where(function(x) !all(is.na(x)))) |>
   drop_na() |>
   rename_with(function(x) str_remove(x, "_CSF"), c(protein_CSF_CSF:IgM_ratio_CSF, glucose_CSF_CSF)) |>
@@ -1066,12 +1228,6 @@ combined_ratio <-
   left_join(
     select(csf_data_complete, patient_id, sample_pair_id, dx_icd_level1:lp_interval),
     by = "sample_pair_id")
-
-  dplyr::filter(across(, ~ .x != 0))
-
-    dplyr::filter(rowSums(across(where(is.numeric))) != 0) |> #filter out CSF samples
-
-colnames(combined_ratio)
 
 # sanity check
 combined_ratio |>
@@ -1089,17 +1245,19 @@ ratio_vars <- str_subset(colnames(combined_ratio), pattern = "_blood$") |>
 blood_vars <- gsub(x = ratio_vars, pattern = "_ratio", replacement = "_blood")
 CSF_vars <- gsub(x = ratio_vars, pattern = "_ratio", replacement = "_CSF")
 
+names_ratio <- paste0(ratio_vars, "_norm")
+
 # create ratios of those vars
-combined_ratio[ratio_vars] <-
+combined_ratio[names_ratio] <-
   map2_dfc(
     select(combined_ratio, all_of(CSF_vars)),
     select(combined_ratio, all_of(blood_vars)),
-    function(x, y) x/y)
+    function(x, y) (x/y)/combined_ratio$albumin_ratio)
 
 #remove infinite values (because divided by 0)
 combined_ratio <-
   combined_ratio |>
-  dplyr::filter(if_all(.cols = ratio_vars, is.finite))
+  dplyr::filter(if_all(.cols = all_of(names_ratio), is.finite))
 
 # section heatmap grouped CSF  with ratios ------------------------------------------
 #first normalize then mean
@@ -1109,7 +1267,7 @@ colnames(combined_ratio)
 phmap_comb_norm <-
   combined_ratio |>
   ## select(dx_icd_level1, granulos_CSF:HLA_DR_T_ratio) |>
-  select(dx_icd_level1, granulos_CSF:lactate_CSF, granulos_ratio:HLA_DR_T_ratio) |>
+  select(dx_icd_level1, granulos_CSF:lactate_CSF, granulos_ratio_norm:HLA_DR_T_ratio_norm) |>
   recipes::recipe(dx_icd_level1 ~ .) |>
   bestNormalize::step_orderNorm(recipes::all_numeric()) |>
   recipes::prep() |>
@@ -1128,11 +1286,11 @@ phmap_comb_group_data <-
   phmap_comb_norm |>
     drop_na(dx_icd_level1) |>
     group_by(dx_icd_level1) |>
-    dplyr::summarize(across(c(granulos_CSF:lactate_CSF, granulos_ratio:HLA_DR_T_ratio),
+    dplyr::summarize(across(c(granulos_CSF:lactate_CSF, granulos_ratio_norm:HLA_DR_T_ratio_norm),
                             function(x) mean(x, na.rm = TRUE))) |>
     column_to_rownames(var = "dx_icd_level1")
 
-phmap_csf_group_data |>
+phmap_comb_group_data |>
     pivot_longer(everything(), names_to = "variable", values_to = "value") |>
     ggplot(aes(x=value))+
     geom_histogram(bins = 10) +
@@ -1141,16 +1299,122 @@ ggsave(file.path("analysis", "relative", "qc", "histogram_comb_norm_mean.pdf"), 
 
 vars_combo_plot <-
   combined_ratio |>
-  select(granulos_CSF:lactate_CSF, granulos_ratio:HLA_DR_T_ratio) |>
+  select(granulos_CSF:lactate_CSF, granulos_ratio_norm:HLA_DR_T_ratio_norm) |>
   names()
 
 debugonce(heatmap_group)
 
-heatmap_group(category = "dx_icd_level1", data = combined_ratio, vars = vars_combo_plot, label = "combo_ratio", cutree_rows = 4, height = 5)
-heatmap_group(category = "dx_icd_level2", data = combined_ratio, vars = vars_combo_plot, label = "combo_ratio", cutree_rows = 10, height = 15)
+names(combined_ratio)
 
-heatmap_group_csf(category = "dx_biobanklist_level1", data =  csf_data, label = "CSF", cutree_rows = 3, height = 5)
-heatmap_group_csf(category = "dx_biobanklist_level2", data =  csf_data, label = "CSF", cutree_rows = 10, height = 15)
-heatmap_group_csf(category = "dx_andi_level1", data =  csf_data, label = "CSF", cutree_rows = 4, height = 5)
-heatmap_group_csf(category = "dx_andi_level2", data =  csf_data, label = "CSF", cutree_rows = 7, height = 15)
-heatmap_group_csf(category = "dx_andi_level3", data =  csf_data, label = "CSF", cutree_rows = 20, height = 15)
+debugonce(heatmap_group)
+
+heatmap_group(
+  category = "dx_icd_level2",
+  data = combined_ratio,
+  vars = vars_combo_plot,
+  label = "combo_ratio",
+  cutree_rows = 10,
+  height = 15,
+  colors = phmap_colors
+)
+
+debugonce(heatmap_group)
+
+vars_ratio_plot <-
+  combined_ratio |>
+  select(granulos_ratio_norm:HLA_DR_T_ratio_norm) |>
+  names()
+
+heatmap_group(
+  category = "dx_icd_level2",
+  data = combined_ratio,
+  vars = vars_ratio_plot,
+  label = "combo_ratio",
+  cutree_rows = 10,
+  height = 15,
+  colors = phmap_colors
+)
+
+qs::qsave(combined_ratio, "combined_ratio.qs")
+
+# experimental: extract icd metadata ------------------------------------------
+csf_data |>
+  select(patient_id, hd, hd_g) |>
+
+str(csf_data$hd_g[1:10])
+test3 <-   ICD10gm::get_icd_labels(csf_data$hd_g[1:10], year = 2022)
+test3 <-   ICD10gm::icd_expand(icd_in = data.frame(ICD = csf_data$hd_g[1:10]), year = 2020)
+
+## # import lookup from hpo github repo https://github.com/DiseaseOntology/HumanDiseaseOntology
+## # works worse than from private github repo, see below, so don't use
+## lookup_icd10_hp <-
+##   read_tsv("./ICD10inDO.tsv") |>
+##   dplyr::mutate(icd10 = gsub(x = xrefs, pattern = "(ICD10CM):([A-Z0-9])", replacement = "\\2"))
+
+## test4 <-
+##   csf_data |>
+##   select(patient_id, hd_g) |>
+##   mutate(hd_g_short = gsub(x = hd_g, pattern = "\\..*", replacement = "")) |>
+##   left_join(lookup_icd10_hp, by = c("hd_g" = "icd10")) |>
+##   left_join(lookup_icd10_hp, by = c("hd_g_short" = "icd10")) |>
+##   mutate(label = coalesce(label.x, label.y)) |>
+##   mutate(id = coalesce(id.x, id.y)) |>
+##   mutate(xrefs = coalesce(xrefs.x, xrefs.y)) |>
+##   select(-id.x, -id.y, -label.x, -label.y, -xrefs.x, -xrefs.y, -hd_g_short) |>
+##   dplyr::distinct(patient_id, .keep_all = TRUE) |>
+##   slice(90:100)
+
+## skimr::skim(test4)
+
+# import lookup mesh umsl mapping from https://github.com/kush02/Automated-ICD10-Codes-Assignment/blob/master/MESH_ICD10_Mapping.csv
+lookup_icd10_mesh <-
+  read_csv("./MESH_ICD10_Mapping.csv")
+
+# join either by entire hd_g (i.e. g or star diagnosis of HD) or by first part of hd_g
+# make distinct if multiple matches
+csf_ontology_pre <-
+  csf_data |>
+  select(patient_id, hd_g) |>
+  mutate(hd_g_short = gsub(x = hd_g, pattern = "\\..*", replacement = "")) |>
+  left_join(lookup_icd10_mesh, by = c("hd_g" = "ICD10CM_CODE"))|>
+  left_join(lookup_icd10_mesh, by = c("hd_g_short" = "ICD10CM_CODE")) |>
+  mutate(mesh = coalesce(MESH_ID.x, MESH_ID.y)) |>
+  mutate(umls = coalesce(UMLS_CUI.x, UMLS_CUI.y)) |>
+  mutate(description = coalesce(DRESCP.x, DRESCP.y)) |>
+  select(-MESH_ID.x, -MESH_ID.y, -UMLS_CUI.x, -UMLS_CUI.y, -DRESCP.x, -DRESCP.y)|>
+  dplyr::distinct(patient_id, .keep_all = TRUE)
+
+  slice(90:100)
+
+skimr::skim(test5)
+
+test5 |>
+  dplyr::count(umls, hd_g) |>
+  arrange(desc(n))
+
+test5 |>
+  dplyr::filter(umls == "C0026769") |>
+  dplyr::count(hd_g, mesh)
+
+lookup_mesh_do <-
+  read_tsv("MeshinDO.tsv") |>
+  dplyr::rename(mesh = xrefs,
+                do = id) |>
+  dplyr::mutate(mesh = gsub(x = mesh, pattern = "MESH:", replacement = ""))
+
+csf_ontology <-
+  csf_ontology_pre |>
+  left_join(lookup_mesh_do, by = c("mesh" = "mesh")) |>
+  dplyr::distinct(patient_id, .keep_all = TRUE)
+
+
+names(csf_data)
+
+r_present <-
+  csf_data |>
+  select(hd:nd_10) |>
+  ##create a new column called R_present that is TRUE if any of the columns hd to nd_10 containts the letter R
+  dplyr::mutate(R_present = if_any(hd:nd_10, function(x) str_detect(x, "R"))) |>
+  print(width = Inf)
+
+sum(r_present$R_present, na.rm = TRUE)/nrow(r_present)

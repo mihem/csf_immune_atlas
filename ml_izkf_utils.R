@@ -254,11 +254,10 @@ dev.off()
 
 #function to create heatmap for grouped mean of combined data with ratios
 heatmap_group <-
-  function(category, data, vars, label, cutree_rows, height, transform = FALSE, cutree_cols = 8) {
+  function(category, data, vars, label, cutree_rows, height, transform = FALSE, cutree_cols = 8, colors) {
     formula <- paste0(category, "~", ".")
     data_interest <- data[c(category, vars)]
     phmap_data_norm <- data_interest |>
-      ## select(.data[[category]], granulos:lactate) |>
       drop_na(.data[[category]]) |>
       recipes::recipe(as.formula(formula)) |>
       bestNormalize::step_orderNorm(recipes::all_numeric()) |>
@@ -273,7 +272,7 @@ if(transform == TRUE) {
 }
 
 phmap_group <- pheatmap::pheatmap(phmap_data_norm,
-        color = phmap_colors,
+        color = colors,
         scale = "none",
         main = label,
         cellwidth = 10,
@@ -287,7 +286,7 @@ phmap_group <- pheatmap::pheatmap(phmap_data_norm,
         clustering_method = "ward.D2",
         border_color = NA
          )
-grDevices::cairo_pdf(file.path("analysis", project, "heatmap", glue::glue("hmap_{label}_{category}.pdf")), width = 15, height = height)
+grDevices::cairo_pdf(file.path("analysis", project, "heatmap", glue::glue("hmap_{label}_{category}.pdf")), width = 20, height = height)
 print(phmap_group)
 dev.off()
 }
@@ -395,4 +394,59 @@ fc_wilcox <- function(data, clusters) {
     }
 res_tibble <- bind_rows(res)
 return(res_tibble)
+}
+
+
+#function to create an abundance plot of the clusters based on soupx
+abundanceCategoryPlot <- function(data, cluster) {
+  data_plot <-
+    data |>
+    dplyr::rename(variable = gene) |>
+    dplyr::mutate(variable = gsub(x = variable, pattern = "dx_icd_level2_", replacement = "")) |>
+    dplyr::mutate(qval = -log10(qval))|>
+    ## dplyr::filter(tfidf > 0.2) |>
+    ## dplyr::filter(qval > -log10(0.01)) |>
+    dplyr::filter(cluster == {{cluster}})
+
+  height <- 1.5 + nrow(data_plot) * 0.05
+
+  plot <-
+    data_plot |>
+    ggplot(aes(x = qval, y = reorder(variable, qval), fill = tfidf)) +
+    geom_col() +
+    viridis::scale_fill_viridis() +
+    theme_classic() +
+    theme(panel.border = element_rect(color = "black", size = 1, fill = NA)) +
+    labs(x = bquote(~-Log[10]~ "qval"), y = "", fill = "TF-IDF", title = paste0("cluster ", cluster))
+  ggsave(file.path("analysis", project, "abundance", paste0("barplot_soupx_", deparse(substitute(data)), "_cluster_", cluster, ".pdf")),
+         width = 6,
+         height = height,
+         device = cairo_pdf)
+}
+
+
+#function to create an abundance plot of the vars based on soupx
+topBarPlot <- function(data, cluster, tfidf_cutoff, qval_cutoff) {
+  data_plot <-
+    data |>
+    dplyr::rename(variable = gene) |>
+    dplyr::mutate(qval = -log10(qval))|>
+    dplyr::mutate(qval = if_else(qval < 1e-320, 1e-320, qval)) |>
+    dplyr::filter(tfidf > tfidf_cutoff) |>
+    dplyr::filter(qval > -log10(qval_cutoff)) |>
+    dplyr::filter(cluster == {{cluster}})
+
+  height <- 1.2 + nrow(data_plot) * 0.1
+
+  plot <-
+    data_plot |>
+    ggplot(aes(x = qval, y = reorder(variable, qval), fill = tfidf)) +
+    geom_col() +
+    viridis::scale_fill_viridis() +
+    theme_classic() +
+    theme(panel.border = element_rect(color = "black", size = 1, fill = NA)) +
+    labs(x = bquote(~-Log[10]~ "qval"), y = "", fill = "TF-IDF", title = paste0("cluster ", cluster))
+  ggsave(file.path("analysis", project, "top", paste0("barplot_soupx_", deparse(substitute(data)), "_cluster_", cluster, ".pdf")),
+         width = 6,
+         height = height)
 }
