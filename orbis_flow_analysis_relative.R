@@ -1418,3 +1418,352 @@ r_present <-
   print(width = Inf)
 
 sum(r_present$R_present, na.rm = TRUE)/nrow(r_present)
+
+# tidymodels  ------------------------------------------
+#comments
+# random forest not much better than elastic net
+# xgboost not significantly better than random forest and takes much longer
+# tuning random forest does not improve performance significantly and takes much longer
+# biobanklist_dx no better than dx_icd and fewer observations
+# up/downsampling does not improve performance
+# different normalization (bestNormalize) does not improve the performance
+
+library(tidymodels)
+## library(themis) # for up/downsampling
+
+# prepare data for tidymodels ------------------------------------------
+top4_icd <-
+  csf_data_complete |>
+  dplyr::filter(!is.na(dx_icd_level2)) |>
+  dplyr::count(dx_icd_level2) |>
+  slice_max(order_by = n, n = 4) |>
+  pull(dx_icd_level2)
+
+data_csf_flow_tidymodels <-
+  csf_data_complete |>
+  dplyr::filter(dx_icd_level2 %in% top4_icd) |>
+  dplyr::mutate(dx_icd_level2 = factor(dx_icd_level2)) |>
+  ## dplyr::mutate(OCB = factor(OCB)) |>
+  dplyr::select(dx_icd_level2, granulos:HLA_DR_T)
+  ## dplyr::select(dx_icd_level2, granulos:lactate)
+
+data_blood_flow_tidymodels <-
+  blood_data_complete |>
+  dplyr::filter(dx_icd_level2 %in% top4_icd) |>
+  dplyr::mutate(dx_icd_level2 = factor(dx_icd_level2)) |>
+  dplyr::select(dx_icd_level2, granulos:HLA_DR_T)
+
+#basic, so  lymphocytes, cell count, protein, IgG ratios, OCB
+data_csf_basic_tidymodels <-
+  csf_data_complete |>
+  dplyr::filter(dx_icd_level2 %in% top4_icd) |>
+  dplyr::mutate(dx_icd_level2 = factor(dx_icd_level2)) |>
+  dplyr::select(dx_icd_level2, lymphos_basic:lactate)
+
+data_combined_tidymodels <-
+  bind_rows(csf_data_complete, blood_data_complete) |>
+  select(sample_pair_id,dx_icd_level2, granulos:lactate, tissue) |>
+  pivot_wider(names_from = tissue, values_from = granulos:lactate) |>
+  select(where(function(x) !all(is.na(x)))) |>
+  drop_na() |>
+  rename_with(function(x) str_remove(x, "_CSF"), c(protein_CSF_CSF:IgM_ratio_CSF, glucose_CSF_CSF)) |>
+  dplyr::filter(dx_icd_level2 %in% top4_icd) |>
+  dplyr::mutate(dx_icd_level2 = factor(dx_icd_level2)) |>
+  dplyr::select(dx_icd_level2, granulos_CSF:lactate_CSF)
+
+# split data ------------------------------------------
+#split, strata will keep the balance between both classes in train and test roughly the same
+set.seed(1234)
+splits <- initial_split(data_csf_flow_tidymodels, prop = 3/4, strata = dx_icd_level2)
+splits <- initial_split(data_blood_flow_tidymodels, prop = 3/4, strata = dx_icd_level2)
+splits <- initial_split(data_csf_basic_tidymodels, prop = 3/4, strata = dx_icd_level2)
+splits <- initial_split(data_combined_tidymodels, prop = 3/4, strata = dx_icd_level2)
+
+train_data <- training(splits)
+test_data <- testing(splits)
+
+#check if balances are the same
+train_data |>
+    count(dx_icd_level2) |>
+    mutate(prop = n/sum(n))
+
+test_data |>
+    count(dx_icd_level2) |>
+    mutate(prop = n/sum(n))
+
+#build the model
+lr_model <-
+  multinom_reg(penalty = tune(), mixture = tune()) |>
+  set_engine("glmnet") |>
+  translate()
+
+rf_model <-
+  ## rand_forest(trees = 3000) |>
+  rand_forest(mtry = tune(), min_n = tune(), trees = 3000) |>
+  set_mode("classification") |>
+  set_engine("ranger")
+
+## xgb_model <-
+##   boost_tree(trees = 1000,
+##              tree_depth = tune(),
+##              min_n = tune(),
+##              loss_reduction = tune(),
+##              sample_size = tune(),
+##              mtry = tune(),
+##              learn_rate = tune()) |>
+##   set_mode("classification") |>
+##   set_engine("xgboost")
+
+# recipe for tidymodels  ------------------------------------------
+data_recipe <-
+  train_data |>
+  recipe(dx_icd_level2 ~ .)
+
+#needed for elastic net but not for random forest
+## |>
+##   step_YeoJohnson(all_numeric_predictors()) |>
+##   step_nzv(all_numeric_predictors()) |>
+##   step_normalize(all_numeric_predictors())
+
+  ## bestNormalize::step_orderNorm(recipes::all_numeric_predictors())
+
+  ## step_smote(dx_icd_level2)
+  ## step_adasyn(dx_icd_level2)
+
+# repeated cross validation ------------------------------------------
+set.seed(1234)
+## folds <- vfold_cv(train_data, v = 10, strata = dx_icd_level2, repeats = 10)
+folds <- vfold_cv(train_data, v = 10, strata = dx_icd_level2, repeats = 1)
+
+# glmnet ------------------------------------------
+library(doMC)
+registerDoMC(cores = 6)
+
+#workflows
+set.seed(1234)
+lr_workflow <-
+    workflow() |>
+    add_model(lr_model) |>
+    add_recipe(data_recipe)
+
+set.seed(1234)
+rf_workflow <-
+  workflow() |>
+  add_model(rf_model) |>
+  add_recipe(data_recipe)
+
+## set.seed(1234)
+## xgb_workflow <-
+##   workflow() |>
+##   add_model(xgb_model) |>
+##   add_recipe(data_recipe)
+
+#grid for tuning
+lr_reg_grid <- grid_regular(penalty(range(-4,0)), mixture(), levels = c(10,5))
+## rf_grid <- grid_regular(mtry(range = c(10,30)), min_n(range = c(3,30)), levels = c(5,2))
+
+## xgb_grid <- grid_latin_hypercube(
+##   tree_depth(),
+##   min_n(),
+##   loss_reduction(),
+##   sample_size = sample_prop(),
+##   finalize(mtry(), train_data),
+##   learn_rate(),
+##   size = 30
+## )
+
+#train and tune lr
+system.time(
+  res_model <-
+    lr_workflow |>
+    tune_grid(
+      resamples = folds,
+      grid = lr_reg_grid,
+      control = control_grid(save_pred = TRUE),
+      metrics = metric_set(accuracy, bal_accuracy, f_meas, roc_auc))
+)
+
+#train and tune rf
+system.time(
+  res_model <-
+    rf_workflow |>
+    tune_grid(
+      resamples = folds,
+      grid = 10,
+      control = control_grid(save_pred = TRUE),
+      metrics = metric_set(accuracy, bal_accuracy, f_meas, roc_auc))
+)
+#6 min witzh 6 cores and without repeats with 3000 trees
+
+#train and tune rf
+system.time(
+  res_model <-
+    xgb_workflow |>
+    tune_grid(
+      resamples = folds,
+      grid = xgb_grid,
+      control = control_grid(save_pred = TRUE),
+      metrics = metric_set(accuracy, bal_accuracy, f_meas, roc_auc))
+)
+#18min with 6 cores and without repeats
+
+stopCluster(cl)
+
+autoplot(res_model, metric = "roc_auc")
+autoplot(res_model, metric = "bal_accuracy")
+
+collect_metrics(res_model)
+
+str(res_model)
+
+extract_fit_parsnip(res_model)
+
+## #lr_res_main <- lr_res
+## res_model |>
+##   collect_predictions() |>
+##   conf_mat(dx_icd_level2, .pred_class) |>
+##   autoplot(type = "heatmap") +
+##   viridis::scale_fill_viridis()
+
+## collect_metrics(res_model) |>
+##   ## dplyr::filter(.metric == "f_meas") |>
+##   ## dplyr::filter(.metric == "accuracy") |>
+##   dplyr::filter(.metric == "roc_auc") |>
+##   ## dplyr::filter(.metric == "bal_accuracy") |>
+##     ## ggplot(aes(x = mixture, y = mean)) +
+##     ggplot(aes(x = penalty, y = mean)) +
+##     geom_point() +
+##     geom_line() +
+##     scale_x_log10()
+
+#balanced accurarcy gave better discrimination of the smaller classes
+
+rf_best <-
+  res_model |>
+  select_best("bal_accuracy")
+
+## xgb_best <-
+##   res_model |>
+##   select_best("bal_accuracy")
+
+lr_best <-
+    res_model |>
+    show_best("bal_accuracy", n = 100) |>
+    mutate(mean = signif(mean, 2)) |>
+    arrange(desc(mean), desc(penalty), desc(mixture)) |>
+    print(n = 30)
+
+lr_best <- dplyr::slice(lr_best, 1)
+lr_best <- dplyr::slice(lr_best, 1)
+
+
+## xgb_best <-
+##   res_model |>
+##   show_best("bal_accuracy", n = 20) |>
+##   arrange(desc(mean)) |>
+##   relocate(mean) |>
+##   dplyr::slice(1)
+
+
+saveRDS(res_model, file.path("analysis", "relative", "models", "csf_flow_rf_model.rds"))
+saveRDS(res_model, file.path("analysis", "relative", "models", "blood_flow_lr_model.rds"))
+saveRDS(res_model, file.path("analysis", "relative", "models", "csf_basic_lr_model.rds"))
+saveRDS(res_model, file.path("analysis", "relative", "models", "combined_lr_model.rds"))
+
+saveRDS(res_model, file.path("analysis", "relative", "models", "csf_flow_lr_model.rds"))
+saveRDS(res_model, file.path("analysis", "relative", "models", "blood_flow_lr_model.rds"))
+saveRDS(res_model, file.path("analysis", "relative", "models", "csf_basic_lr_model.rds"))
+saveRDS(res_model, file.path("analysis", "relative", "models", "combined_lr_model.rds"))
+
+# build last model  ------------------------------------------
+last_lr_workflow <- finalize_workflow(lr_workflow, lr_best)
+last_rf_workflow <- finalize_workflow(rf_workflow, rf_best)
+## last_xgb_workflow <-  finalize_workflow(xgb_workflow,xgb_best)
+
+
+last_rf_model <-
+  rand_forest(mtry = rf_best$mtry, min_n = rf_best$min_n, trees = 3000) |>
+  set_mode("classification") |>
+  set_engine("ranger", importance = "impurity")
+
+
+# the last workflow
+last_rf_workflow <-
+  rf_workflow |>
+  update_model(last_rf_model)
+
+#fit best model to train data and evaluate on test data
+set.seed(1234)
+
+last_fit <-
+  last_lr_workflow |>
+  last_fit(splits,
+           metrics = metric_set(accuracy, bal_accuracy, f_meas, roc_auc)
+           )
+
+last_fit <-
+  last_rf_workflow |>
+  last_fit(splits,
+           metrics = metric_set(accuracy, bal_accuracy, f_meas, roc_auc)
+           )
+
+## last_fit <-
+##   last_xgb_workflow |>
+##   last_fit(splits,
+##            metrics = metric_set(accuracy, bal_accuracy, f_meas, roc_auc)
+##            )
+
+final_metric <- collect_metrics(last_fit)
+
+plotConfMat <- function(last_fit, name) {
+  collect_predictions(last_fit) |>
+    conf_mat(truth = dx_icd_level2, estimate = .pred_class) |>
+    autoplot(type = "heatmap") +
+    viridis::scale_fill_viridis() +
+    ggtitle(glue::glue("{name} ROC AUC {signif(final_metric$.estimate,2)[4]}, BACC {signif(final_metric$.estimate,2)[2]}")) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.3))
+  ggsave(file.path("analysis", "relative", "models", glue::glue("{name}_rf_conf_mat.pdf")), width = 5, height = 5)
+}
+
+
+plotConfMat(last_fit, "CSF_flow")
+plotConfMat(last_fit, "blood_flow")
+plotConfMat(last_fit, "CSF_basic")
+plotConfMat(last_fit, "combined")
+
+#rf models
+saveRDS(last_fit, file.path("analysis", "relative", "models", "csf_flow_rf_final_model.rds"))
+saveRDS(last_fit, file.path("analysis", "relative", "models", "blood_flow_rf_final_model.rds"))
+saveRDS(last_fit, file.path("analysis", "relative", "models", "csf_basic_rf_final_model.rds"))
+saveRDS(last_fit, file.path("analysis", "relative", "models", "combined_rf_final_model.rds"))
+
+#elast net mocdles
+saveRDS(last_fit, file.path("analysis", "relative", "models", "csf_flow_lr_final_model.rds"))
+saveRDS(last_fit, file.path("analysis", "relative", "models", "blood_flow_lr_final_model.rds"))
+saveRDS(last_fit, file.path("analysis", "relative", "models", "csf_basic_lr_final_model.rds"))
+saveRDS(last_fit, file.path("analysis", "relative", "models", "combined_lr_final_model.rds"))
+
+#vip with auc train/test
+last_fit |>
+    extract_fit_parsnip() |>
+    vip::vi() |>
+    dplyr::filter(Importance != 0) |>
+    ## mutate(Importance = if_else(Sign == "POS", Importance*-1, Importance)) |> # somehow wrong direction
+    ggplot(aes(x = Importance, y = fct_reorder(Variable, Importance)))+
+    geom_point(color = my_cols[2])+
+    geom_segment(aes(xend = 0, yend = Variable), color = my_cols[2])+
+    theme_bw()+
+    ylab(NULL)+
+    xlab("Predictor importance") +
+    theme(legend.position = "none")
+
+
+ggsave(file.path("analysis", "relative", "models", "CSF_flow_rf_vip.pdf"), width = 5, height = 3)
+ggsave(file.path("analysis", "relative", "models", "blood_flow_rf_vip.pdf"), width = 5, height = 3)
+ggsave(file.path("analysis", "relative", "models", "csf_basic_rf_vip.pdf"), width = 5, height = 3)
+ggsave(file.path("analysis", "relative", "models", "combined_rf_vip.pdf"), width = 5, height = 7)
+
+#perform ROC test between results of model and single parameter
+## roc_res_multi <-
+##   augment(last_lr_fit) |>
+##     pROC::roc(dx_neuro, ".pred_N-CTD")
