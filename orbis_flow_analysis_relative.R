@@ -12,6 +12,7 @@ library(skimr)
 library(qs)
 library(SoupX)
 library(ICD10gm)
+library(wizard)
 
 source("ml_izkf_utils.R")
 project <- "relative"
@@ -21,7 +22,7 @@ phmap_colors <- colorRampPalette(rev(brewer.pal(n = 8, name = "RdBu")))(100) #ni
 
 #large sequential color palette
 set.seed(123)
-my_cols <- unname(createPalette(60, RColorBrewer::brewer.pal(8, "Set2")))
+my_cols <- unname(createPalette(1000, RColorBrewer::brewer.pal(8, "Set2")))
 
 # section read in final data for analysis ------------------------------------------
 all_data_one_fil <- qs::qread("final_one_rel.qs")
@@ -55,6 +56,7 @@ sum(all_data_one_fil$csf$event_count)# 233 million events
 all_data_one <- read_csv("orbis_flow_rel_one.csv")
 all_data <- read_csv("orbis_flow_rel.csv")
 
+
 all_data |>
     dplyr::group_by(patient_id, tissue) |>
     dplyr::filter(n() > 1) |>
@@ -65,7 +67,7 @@ all_data |>
 subfolders <- file.path(
   "analysis",
   "relative",
-  c("qc", "categories", "correlation", "feature", "heatmap", "umap", "abundance", "top")
+  c("qc", "categories", "correlation", "feature", "heatmap", "umap", "abundance", "top", "models", "interval")
 )
 lapply(subfolders, dir.create, recursive = TRUE)
 
@@ -108,7 +110,11 @@ all_data_one_filter_v2 <-
 csf_data <-
     all_data_one_filter_v2 |>
     dplyr::filter(tissue == "CSF") |>
-    dplyr::mutate(OCB = ifelse(OCB == 2 | OCB == 3, 1, 0))
+    dplyr::mutate(OCB = ifelse(OCB == 2 | OCB == 3, 1, 0)) |>
+    dplyr::rename(sex = geschlecht) |>
+    dplyr::mutate(sex = case_when(sex == "W" ~ "f",
+                                   sex == "M" ~ "m",
+                                    TRUE ~ NA_character_))
 
 csf_naive_data <-
     csf_data |>
@@ -117,7 +123,11 @@ csf_naive_data <-
 blood_data <-
     all_data_one_filter_v2 |>
     dplyr::filter(tissue == "blood") |>
-    select(where(function(x) !all(is.na(x))))
+    select(where(function(x) !all(is.na(x)))) |>
+    dplyr::rename(sex = geschlecht) |>
+    dplyr::mutate(sex = case_when(sex == "W" ~ "f",
+                                   sex == "M" ~ "m",
+                                    TRUE ~ NA_character_))
 
 blood_naive_data <-
     blood_data |>
@@ -150,6 +160,22 @@ lapply(categories, count_category)
 
 lapply(categories, plot_category)
 
+# age sex histograms ------------------------------------------
+sex_age_histogram <-
+  csf_data |>
+  dplyr::filter(!is.na(sex)) |>
+  ggplot(aes(x = age, fill = sex)) +
+  #    geom_density(alpha = 0.3) +
+  ## geom_histogram(data = dplyr::filter(csf_data, sex == "f"), fill = "red", bins = 100, alpha = 0.2) +
+  ## geom_histogram(data = dplyr::filter(csf_data, sex == "m"), fill = "blue", bins = 100, alpha = 0.2) +
+  geom_histogram(bins = 25) +
+  facet_wrap(vars(sex), scales = "free", ncol = 4) +
+  theme_bw() +
+  theme(legend.position = "none")
+
+ggsave(plot = sex_age_histogram, file.path("analysis", "relative", "basic", "sex_age_histogram.pdf"), width = 7, height = 5)
+
+
 # correlation plot ------------------------------------------
 #remove all those with only missing NA
 #rename those with two "CSF" in their name, like protein_CSF_CSF
@@ -165,16 +191,104 @@ cor_data <-
 pdf(file.path("analysis", "relative", "correlation", "corplot_spearman.pdf"), width = 8, height = 8)
 corrplot(cor_data, order = "hclust", method = "color", col = phmap_colors, tl.col = "black", cl.cex = 0.8, tl.cex = 0.5, hclust.method = "ward.D")
 dev.off()
-cor(csf_data$OCB, csf_data$plasma, use = "complete.obs", method = "spearman")
+
+head(cor_data)
 
 ##correlation with age difficult because correlates strongly with diseases
 
-## cor_fun <- function(data, var) {
-##     cor(x = data[[var]], y =data[["age"]], use = "complete.obs", method = "spearman")
-## }
+glm(data = csf_data, HLA_DR_CD4 ~ age + dx_icd_level2, family = "gaussian") |>
+  tidy()
 
-## cor_fun(data = csf_data, var = "plasma")
-## lapply(c("plasma", "granulos"), cor_fun, data = csf_data)
+glm(data = csf_data, dim_NK ~ age + dx_icd_level2, family = "gaussian") |>
+  tidy()
+
+
+# regress out age using dx_icd_level2 ------------------------------------------
+#remove if dx_icd_level2 not present
+
+combined_data <-
+  bind_rows(csf_data, blood_data) |>
+  select(sample_pair_id, dx_icd_level2, tissue, age, granulos:lactate) |>
+  pivot_wider(names_from = tissue, values_from = granulos:lactate) |>
+  select(where(function(x) !all(is.na(x)))) |>
+  select(-sample_pair_id) |>
+  rename_with(function(x) str_remove(x, "_CSF"), c(protein_CSF_CSF:IgM_ratio_CSF, glucose_CSF_CSF))
+
+
+# remove basic cell counts because they have low variability (many zeros) and OCB  because it is discrete
+vars_cor <-
+  combined_data |>
+  select(granulos_CSF:lactate_CSF) |>
+  select(-OCB_CSF) |>
+  select(-lymphos_basic_CSF, -granulos_basic_CSF, -erys_basic_CSF, -other_cells_basic_CSF, -cell_count_CSF) |>
+  names()
+
+combined_regress_age<-
+  combined_data |>
+  drop_na(dx_icd_level2) |>
+  datawizard::adjust(effect = "dx_icd_level2", select = vars_cor, keep_intercept = TRUE) |>
+  tibble()
+
+#sanity check
+combined_data |>
+  select(plasma_CSF)
+
+combined_regress_age |>
+  select(plasma_CSF)
+
+combined_regress_age1 |>
+  select(plasma_CSF)
+
+#function to calculcate correlation test for each variable with age
+cor_fun <- function(data, var) {
+    tidy(cor.test(x = data[[var]], y =data[["age"]], use = "complete.obs", method = "spearman"))
+}
+
+
+# regressed out dx_icd_level2
+cor_age_regress <-
+  lapply(vars_cor, FUN = function(x) cor_fun(data = combined_regress_age, var = x)) |>
+  set_names(vars_cor) |>
+  bind_rows(.id = "var")|>
+  mutate(p_adjust = p.adjust(p.value, method = "BH", n = length(vars_cor)), 2) |>
+  arrange(desc(abs(estimate)))
+
+# volcano plot of correlation with age
+cor_age_regress |>
+  mutate(neg_log10_qval = -log10(p_adjust)) |>
+  ggplot(aes(x = estimate, y = neg_log10_qval, label = var)) +
+  geom_point() +
+  ggrepel::geom_text_repel() +
+  geom_hline(yintercept = -log10(0.001), color = "blue", linetype = "dashed")+ #horizontal line p unadjusted
+  geom_vline(xintercept = 0, color = "red", linetype = "dashed")+ #vertical line
+  xlab("correlation coefficient")+
+  ylab(bquote(-Log[10]~ "adjusted p value")) +
+  theme(legend.position = "none") +
+  theme_bw()
+
+ggsave(file.path("analysis", "relative", "correlation", "correlation_age_regress.pdf"), width = 12, height = 13)
+
+#unregressed data
+cor_age <-
+  lapply(vars_cor, FUN = function(x) cor_fun(data = combined_data, var = x)) |>
+  set_names(vars_cor) |>
+  bind_rows(.id = "var")|>
+  mutate(p_adjust = p.adjust(p.value, method = "BH", n = length(vars_cor)), 2) |>
+  arrange(desc(abs(estimate)))
+
+cor_age |>
+  mutate(neg_log10_qval = -log10(p_adjust)) |>
+  ggplot(aes(x = estimate, y = neg_log10_qval, label = var)) +
+  geom_point() +
+  ggrepel::geom_text_repel() +
+  geom_hline(yintercept = -log10(0.001), color = "blue", linetype = "dashed")+ #horizontal line p unadjusted
+  geom_vline(xintercept = 0, color = "red", linetype = "dashed")+ #vertical line
+  xlab("correlation coefficient")+
+  ylab(bquote(-Log[10]~ "adjusted p value")) +
+  theme(legend.position = "none") +
+  theme_bw()
+
+ggsave(file.path("analysis", "relative", "correlation", "correlation_age.pdf"), width = 12, height = 13)
 
 ## cor_age_data <-
 ##     bind_rows(csf_data, blood_data) |>
@@ -1421,9 +1535,10 @@ sum(r_present$R_present, na.rm = TRUE)/nrow(r_present)
 
 # tidymodels  ------------------------------------------
 #comments
-# random forest not much better than elastic net
+# random forest a little better than elastic net
+# more trees in random forest (from 1000 to 3000) improves performance
+# tuning random forest (mtry and min_n) does not significantly improve performance
 # xgboost not significantly better than random forest and takes much longer
-# tuning random forest does not improve performance significantly and takes much longer
 # biobanklist_dx no better than dx_icd and fewer observations
 # up/downsampling does not improve performance
 # different normalization (bestNormalize) does not improve the performance
@@ -1614,10 +1729,6 @@ autoplot(res_model, metric = "bal_accuracy")
 
 collect_metrics(res_model)
 
-str(res_model)
-
-extract_fit_parsnip(res_model)
-
 ## #lr_res_main <- lr_res
 ## res_model |>
 ##   collect_predictions() |>
@@ -1636,7 +1747,9 @@ extract_fit_parsnip(res_model)
 ##     geom_line() +
 ##     scale_x_log10()
 
-#balanced accurarcy gave better discrimination of the smaller classes
+show_best(res_model, "roc_auc")
+
+#balanced accurarcy gave better discrimination of the smaller classes in elastic net
 
 rf_best <-
   res_model |>
@@ -1666,9 +1779,9 @@ lr_best <- dplyr::slice(lr_best, 1)
 
 
 saveRDS(res_model, file.path("analysis", "relative", "models", "csf_flow_rf_model.rds"))
-saveRDS(res_model, file.path("analysis", "relative", "models", "blood_flow_lr_model.rds"))
-saveRDS(res_model, file.path("analysis", "relative", "models", "csf_basic_lr_model.rds"))
-saveRDS(res_model, file.path("analysis", "relative", "models", "combined_lr_model.rds"))
+saveRDS(res_model, file.path("analysis", "relative", "models", "blood_flow_rf_model.rds"))
+saveRDS(res_model, file.path("analysis", "relative", "models", "csf_basic_rf_model.rds"))
+saveRDS(res_model, file.path("analysis", "relative", "models", "combined_rf_model.rds"))
 
 saveRDS(res_model, file.path("analysis", "relative", "models", "csf_flow_lr_model.rds"))
 saveRDS(res_model, file.path("analysis", "relative", "models", "blood_flow_lr_model.rds"))
@@ -1677,10 +1790,10 @@ saveRDS(res_model, file.path("analysis", "relative", "models", "combined_lr_mode
 
 # build last model  ------------------------------------------
 last_lr_workflow <- finalize_workflow(lr_workflow, lr_best)
-last_rf_workflow <- finalize_workflow(rf_workflow, rf_best)
+## last_rf_workflow <- finalize_workflow(rf_workflow, rf_best)
 ## last_xgb_workflow <-  finalize_workflow(xgb_workflow,xgb_best)
 
-
+#necessary to specify the model again to include the importance
 last_rf_model <-
   rand_forest(mtry = rf_best$mtry, min_n = rf_best$min_n, trees = 3000) |>
   set_mode("classification") |>
@@ -1767,3 +1880,226 @@ ggsave(file.path("analysis", "relative", "models", "combined_rf_vip.pdf"), width
 ## roc_res_multi <-
 ##   augment(last_lr_fit) |>
 ##     pROC::roc(dx_neuro, ".pred_N-CTD")
+
+
+# patients with more than one lumbar puncture ------------------------------------------
+# remove if no aufnahme date present, around 2000 cases
+# calculate time between first sample measure data and all following (convert to numeric for future analysis), absolute because of technical error
+all_data_multi <-
+  all_data |>
+  tidyr::drop_na(aufnahme, measure_date_orbis) |>
+  dplyr::group_by(patient_id, tissue) |>
+  dplyr::filter(n() > 1) |>
+  dplyr::mutate(interval = abs(as.numeric(difftime(measure_date, min(aufnahme), units = "days")))) |>
+  dplyr::ungroup() |>
+  dplyr::mutate(patient_id = as.character(patient_id))
+
+
+# sanity check
+all_data_multi |>
+  dplyr::filter(patient_id == "111112") |>
+  dplyr::select(patient_id, sample_pair_id, tissue, measure_date, aufnahme, interval)
+
+
+#filter out if event_count below 3000 for CSF -> 155 removed
+#filter out if event_count below 5000 for blood -> 51 removed
+all_data_multi_filter <-
+    all_data_multi |>
+    dplyr::filter(!(event_count < 3000 & tissue == "CSF")) |>
+    dplyr::filter(!(event_count < 7000 & tissue == "blood"))
+
+csf_data_multi <-
+    all_data_multi_filter |>
+    dplyr::filter(tissue == "CSF") |>
+    dplyr::mutate(OCB = ifelse(OCB == 2 | OCB == 3, 1, 0))
+
+blood_data_multi <-
+    all_data_multi_filter |>
+    dplyr::filter(tissue == "blood") |>
+    select(where(function(x) !all(is.na(x))))
+
+data_combined_multi <-
+  bind_rows(csf_data_multi, blood_data_multi) |>
+  select(patient_id, sample_pair_id,dx_icd_level2, interval, granulos:lactate, tissue) |>
+  pivot_wider(names_from = tissue, values_from = granulos:lactate) |>
+  select(where(function(x) !all(is.na(x)))) |>
+  rename_with(function(x) str_remove(x, "_CSF"), c(protein_CSF_CSF:IgM_ratio_CSF, glucose_CSF_CSF))
+
+qs::qsave(data_combined_multi, "final_multi_comb_rel.qs")
+
+# absolute numbers for longitudinal analysis  ------------------------------------------
+# remove all columns that are not finite
+#convert concentration per ml in concentration per µl
+
+all_data_abs_multi <-
+  read_csv("orbis_flow_concentration.csv") |>
+  dplyr::filter(if_all(granulos:bright_NK, function(x) is.finite(x))) |>
+  tidyr::drop_na(aufnahme, measure_date_orbis) |>
+  dplyr::group_by(patient_id, tissue) |>
+  dplyr::filter(n() > 1) |>
+  dplyr::mutate(interval = abs(as.numeric(difftime(measure_date, min(aufnahme), units = "days")))) |>
+  dplyr::ungroup() |>
+  dplyr::mutate(patient_id = as.character(patient_id)) |>
+  dplyr::mutate(across(granulos:bright_NK, function(x) x/1000))
+
+
+names(all_data_abs_multi)
+
+all_data_abs_multi_filter <-
+    all_data_abs_multi |>
+    dplyr::filter(!(event_count < 3000 & tissue == "CSF")) |>
+    dplyr::filter(!(event_count < 7000 & tissue == "blood"))
+
+csf_data_multi_abs <-
+    all_data_abs_multi_filter |>
+    dplyr::filter(tissue == "CSF") |>
+    dplyr::mutate(OCB = ifelse(OCB == 2 | OCB == 3, 1, 0))
+
+blood_data_multi_abs <-
+    all_data_abs_multi_filter |>
+    dplyr::filter(tissue == "blood") |>
+    select(where(function(x) !all(is.na(x))))
+
+data_combined_multi_abs <-
+  bind_rows(csf_data_multi_abs, blood_data_multi_abs) |>
+  select(patient_id, sample_pair_id,dx_icd_level2, interval, granulos:lactate, tissue) |>
+  pivot_wider(names_from = tissue, values_from = granulos:lactate) |>
+  select(where(function(x) !all(is.na(x)))) |>
+  rename_with(function(x) str_remove(x, "_CSF"), c(protein_CSF_CSF:IgM_ratio_CSF, glucose_CSF_CSF))
+
+data_combined_multi_abs_norm <-
+  data_combined_multi_abs |>
+  recipes::recipe(dx_icd_level2 ~ .) |>
+  bestNormalize::step_orderNorm(c(granulos_CSF:lactate_CSF)) |>
+  recipes::prep() |>
+  recipes::bake(new_data = NULL)
+
+names(data_combined_multi_abs_norm)
+#    recipes::step_invlogit(lymphos_basic:cell_count, plasma, OCB) |>
+
+qs::qsave(data_combined_multi_abs, "final_multi_comb_abs.qs")
+
+## normalize combined blood csf with ratios ------------------------------------------
+
+#normalize leads to even smaller effects
+## data_combined_multi_norm <-
+##   data_combined_multi |>
+##   recipes::recipe(sample_pair_id ~ .) |>
+##   bestNormalize::step_orderNorm(c(granulos_CSF:lactate_CSF)) |>
+##   recipes::prep() |>
+##   recipes::bake(new_data = NULL)
+
+LinePlot <- function(data, diagnosis, all_pars, par, xlim_end, method) {
+  #rfilter certain diagnosis and only keep values before a certain interval
+  #remove all values that do not have at least two measurements in this interval
+  # make interval discrete for boxplots
+  df <-
+    data |>
+    dplyr::filter(dx_icd_level2 == diagnosis) |>
+    dplyr::filter(interval < xlim_end) |>
+    dplyr::group_by(patient_id) |>
+    dplyr::filter(n() > 1) |>
+    dplyr::ungroup() |>
+    dplyr::mutate(patient_id = as.character(patient_id))
+  ##   dplyr::mutate(interval_cut = cut_number(interval, n_interval, boundary = 0))
+
+## ## # important: calculate p values of ALL parameters, then adjust, then select the one you are interested in
+##   cor_res <-
+##     lapply(all_pars,
+##            FUN = function(x) tidy(cor.test(df$interval, df[[x]], method = "pearson"))) |>
+##     set_names(all_pars) |>
+##     bind_rows(.id = "var1") |>
+##     mutate(p_adjust = round(p.adjust(p.value, method = "BH", n = length(all_pars)), 2)) |>
+##     mutate(estimate = round(estimate, 2)) |>
+##     dplyr::filter(var1 == par)
+
+  res_plot <-
+    df |>
+    ggplot(aes(x = interval, y = .data[[par]])) +
+    ## geom_boxplot(aes(group = interval_cut)) +
+    geom_line(aes(color = patient_id), alpha = 0.3) +
+    geom_point(aes(color = patient_id), alpha = 0.3) +
+    theme_bw() +
+    xlab("days") +
+    ylab("") +
+    geom_smooth(method = "loess", se = TRUE) +
+    theme(legend.position = "none") +
+    ggtitle(glue::glue("{par}")) +
+    ## ggtitle(glue::glue("{par}, r = {cor_res$estimate}, p = {cor_res$p_adjust}")) +
+    scale_color_manual(values = my_cols)
+
+return(res_plot)
+}
+
+count(data_combined_multi, dx_icd_level2) |>
+  arrange(desc(n))
+
+debugonce(LinePlot)
+
+interval_bac_meningitis <-
+  lapply(combined_vars,
+         FUN = function(x) LinePlot(data = data_combined_multi_abs,
+                                    diagnosis = "bacterial meningitis",
+                                    par = x,
+                                    all_pars = combined_vars,
+                                    xlim_end = 50,
+                                    method = "pearson"
+                                    ))
+
+bac_plot <- patchwork::wrap_plots(interval_bac_meningitis, ncol = 4)
+ggsave(plot = bac_plot, file.path("analysis", "relative", "interval", "bac_meningitis_abs.pdf"), width = 15, height = 60, limitsize = FALSE)
+
+interval_viral_encephalitis <-
+  lapply(combined_vars,
+         FUN = function(x) LinePlot(data = data_combined_multi_abs,
+                                    diagnosis = "viral encephalitis",
+                                    par = x,
+                                    all_pars = combined_vars,
+                                    xlim_end = 50,
+                                    method = "pearson"
+                                    ))
+
+viral_encephalitis_plot <- patchwork::wrap_plots(interval_viral_encephalitis, ncol = 4)
+ggsave(plot = viral_encephalitis_plot, file.path("analysis", "relative", "interval", "viral_encephalitis_abs.pdf"), width = 15, height = 60, limitsize = FALSE)
+
+interval_multiple_sclerosis <-
+  lapply(combined_vars,
+         FUN = function(x) LinePlot(data = data_combined_multi_abs_norm,
+                                    diagnosis = "multiple sclerosis",
+                                    par = x,
+                                    all_pars = combined_vars,
+                                    xlim_end = 10000,
+                                    method = "pearson"
+                                    ))
+
+multiple_sclerosis_plot <- patchwork::wrap_plots(interval_multiple_sclerosis, ncol = 4)
+ggsave(plot = multiple_sclerosis_plot, file.path("analysis", "relative", "interval", "multiple_sclerosis_abs_norm.pdf"), width = 17, height = 60, limitsize = FALSE)
+
+
+#inflammatory demyelinating polyneuropathy
+interval_inflammatory_demyelinating_pnp <-
+  lapply(combined_vars,
+         FUN = function(x) LinePlot(data = data_combined_multi_abs_norm,
+                                    diagnosis = "inflammatory demyelinating neuropathy",
+                                    par = x,
+                                    all_pars = combined_vars,
+                                    xlim_end = 1000,
+                                    method = "pearson"
+                                    ))
+
+inflammatory_demyelinating_pnp_plot <- patchwork::wrap_plots(interval_inflammatory_demyelinating_pnp, ncol = 4)
+ggsave(plot = inflammatory_demyelinating_pnp_plot, file.path("analysis", "relative", "interval", "inflammatory_demyelinating_pnp_abs_norm.pdf"), width = 17, height = 60, limitsize = FALSE)
+
+# idiopathy intra cranial hypertension
+interval_intracranial_hypertension <-
+  lapply(combined_vars,
+         FUN = function(x) LinePlot(data = data_combined_multi_abs_norm,
+                                    diagnosis = "idiopathic intracranial hypertension",
+                                    par = x,
+                                    all_pars = combined_vars,
+                                    xlim_end = 10000,
+                                    method = "pearson"
+                                    ))
+
+intracranial_hypertension_plot <- patchwork::wrap_plots(interval_intracranial_hypertension, ncol = 4)
+ggsave(plot = intracranial_hypertension_plot, file.path("analysis", "relative", "interval", "intracranial_hypertension_abs_norm.pdf"), width = 17, height = 60, limitsize = FALSE)
