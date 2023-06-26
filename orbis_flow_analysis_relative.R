@@ -12,7 +12,7 @@ library(skimr)
 library(qs)
 library(SoupX)
 library(ICD10gm)
-library(wizard)
+library(datawizard)
 
 source("ml_izkf_utils.R")
 project <- "relative"
@@ -39,8 +39,9 @@ csf_norm_complete <- all_data_norm_complete$csf
 blood_norm_complete <- all_data_norm_complete$blood
 
 combined_norm_complete <- qs::qread("final_one_rel_combined_norm_complete.qs")
+combined_umap_full <- qs::qread("final_one_rel_umap_combined.qs")
 
-combined_ratio <- qs::qread("combined_ratio.qs")
+## combined_ratio <- qs::qread("combined_ratio.qs")
 
 sum(all_data_one_fil$blood$event_count) #1313 million events
 sum(all_data_one_fil$csf$event_count)# 233 million events
@@ -196,24 +197,32 @@ head(cor_data)
 
 ##correlation with age difficult because correlates strongly with diseases
 
-glm(data = csf_data, HLA_DR_CD4 ~ age + dx_icd_level2, family = "gaussian") |>
-  tidy()
-
-glm(data = csf_data, dim_NK ~ age + dx_icd_level2, family = "gaussian") |>
-  tidy()
-
 
 # regress out age using dx_icd_level2 ------------------------------------------
 #remove if dx_icd_level2 not present
-
 combined_data <-
   bind_rows(csf_data, blood_data) |>
-  select(sample_pair_id, dx_icd_level2, tissue, age, granulos:lactate) |>
+  select(sample_pair_id, dx_icd_level2, tissue, age, sex, granulos:lactate) |>
   pivot_wider(names_from = tissue, values_from = granulos:lactate) |>
   select(where(function(x) !all(is.na(x)))) |>
   select(-sample_pair_id) |>
   rename_with(function(x) str_remove(x, "_CSF"), c(protein_CSF_CSF:IgM_ratio_CSF, glucose_CSF_CSF))
 
+combined_data_ctrl <-
+  combined_data |>
+  dplyr::filter(dx_icd_level2 == "somatoform")
+
+combined_data_ctrl |>
+  count(sex)
+
+combined_data_ctrl |>
+  ggplot(aes(x = age)) +
+  geom_histogram()
+
+csf_data |>
+  dplyr::filter(dx_icd_level2 == "somatoform") |>
+  arrange(age) |>
+  select(age, hd, dx_icd_level2)
 
 # remove basic cell counts because they have low variability (many zeros) and OCB  because it is discrete
 vars_cor <-
@@ -223,21 +232,118 @@ vars_cor <-
   select(-lymphos_basic_CSF, -granulos_basic_CSF, -erys_basic_CSF, -other_cells_basic_CSF, -cell_count_CSF) |>
   names()
 
-combined_regress_age<-
-  combined_data |>
+## #regress out age
+## combined_regress_age_dx_icd_level2 <-
+##   combined_data |>
+##   drop_na(dx_icd_level2) |>
+##   datawizard::adjust(effect = c("dx_icd_level2", "age"), select = vars_cor, keep_intercept = TRUE) |>
+##   tibble()
+
+combined_ctrl_regress_sex_dx_icd_level2 <-
+  combined_data_ctrl |>
   drop_na(dx_icd_level2) |>
-  datawizard::adjust(effect = "dx_icd_level2", select = vars_cor, keep_intercept = TRUE) |>
+  datawizard::adjust(effect = c("sex"), select = vars_cor, keep_intercept = TRUE) |>
+  tibble()
+
+## # regress out sex
+## combined_regress_sex_dx_icd_level2<-
+##   combined_data |>
+##   drop_na(dx_icd_level2) |>
+##   datawizard::adjust(effect = c("dx_icd_level2", "sex"), select = vars_cor, keep_intercept = TRUE) |>
+##   tibble()
+
+combined_ctrl_regress_sex_dx_icd_level2<-
+  combined_data_ctrl |>
+  drop_na(dx_icd_level2) |>
+  datawizard::adjust(effect = c("sex"), select = vars_cor, keep_intercept = TRUE) |>
   tibble()
 
 #sanity check
 combined_data |>
-  select(plasma_CSF)
+  select(HLA_DR_CD8_blood)
 
-combined_regress_age |>
-  select(plasma_CSF)
+combined_regress_sex_dx_icd_level2 |>
+  select(HLA_DR_CD8_blood)
 
-combined_regress_age1 |>
-  select(plasma_CSF)
+combined_regress_age_dx_icd_level2 |>
+  select(HLA_DR_CD8_blood)
+
+#function to calculcate correlation test for each variable with age
+cor_fun <- function(data, var) {
+    tidy(cor.test(x = data[[var]], y =data[["age"]], use = "complete.obs", method = "spearman"))
+}
+
+## # regressed out dx_icd_level2
+## cor_age_regress <-
+##   lapply(vars_cor, FUN = function(x) cor_fun(data = combined_regress_sex_dx_icd_level2, var = x)) |>
+##   set_names(vars_cor) |>
+##   bind_rows(.id = "var")|>
+##   mutate(p_adjust = p.adjust(p.value, method = "BH", n = length(vars_cor)), 2) |>
+##   arrange(desc(abs(estimate)))
+
+# regressed out dx_icd_level2
+cor_age_regress_ctrl <-
+  lapply(vars_cor, FUN = function(x) cor_fun(data = combined_ctrl_regress_sex_dx_icd_level2, var = x)) |>
+  set_names(vars_cor) |>
+  bind_rows(.id = "var")|>
+  mutate(p_adjust = p.adjust(p.value, method = "BH", n = length(vars_cor)), 2) |>
+  arrange(desc(abs(estimate)))
+
+# volcano plot of correlation with age
+## cor_age_regress |>
+cor_age_regress_ctrl |>
+  mutate(neg_log10_qval = -log10(p_adjust)) |>
+  ggplot(aes(x = estimate, y = neg_log10_qval, label = var)) +
+  geom_point() +
+  ggrepel::geom_text_repel() +
+  geom_hline(yintercept = -log10(0.001), color = "blue", linetype = "dashed")+ #horizontal line p unadjusted
+  geom_vline(xintercept = 0, color = "red", linetype = "dashed")+ #vertical line
+  xlab("correlation coefficient")+
+  ylab(bquote(-Log[10]~ "adjusted p value")) +
+  theme(legend.position = "none") +
+  theme_bw()
+
+ggsave(file.path("analysis", "relative", "correlation", "correlation_age_regress_ctrl.pdf"), width = 12, height = 13)
+
+
+## #unregressed data
+## cor_age <-
+##   lapply(vars_cor, FUN = function(x) cor_fun(data = combined_data, var = x)) |>
+##   set_names(vars_cor) |>
+##   bind_rows(.id = "var")|>
+##   mutate(p_adjust = p.adjust(p.value, method = "BH", n = length(vars_cor)), 2) |>
+##   arrange(desc(abs(estimate)))
+
+## cor_age |>
+##   mutate(neg_log10_qval = -log10(p_adjust)) |>
+##   ggplot(aes(x = estimate, y = neg_log10_qval, label = var)) +
+##   geom_point() +
+##   ggrepel::geom_text_repel() +
+##   geom_hline(yintercept = -log10(0.001), color = "blue", linetype = "dashed")+ #horizontal line p unadjusted
+##   geom_vline(xintercept = 0, color = "red", linetype = "dashed")+ #vertical line
+##   xlab("correlation coefficient")+
+##   ylab(bquote(-Log[10]~ "adjusted p value")) +
+##   theme(legend.position = "none") +
+##   theme_bw()
+
+## ggsave(file.path("analysis", "relative", "correlation", "correlation_age.pdf"), width = 12, height = 13)
+
+combined_ctrl_regress_sex_dx_icd_level2 |>
+  ggplot(aes(x = age, y = HLA_DR_CD4_CSF))+
+  geom_point(size = 0.1, alpha = 0.5) +
+  geom_smooth(method = "lm", se = TRUE) +
+  theme_bw()
+
+ggsave(file.path("analysis", "relative", "correlation", "correlation_ctrl_age_regress_lineplot.pdf"), width = 5, height = 5)
+
+
+# sex ------------------------------------------
+debugonce(shapiro.test)
+shapiro.test(combined_data$protein_CSF[1:5000])
+shapiro.test(combined_data$monos_CSF[1:5000])
+
+library(nortest)
+nortest::ad.test(combined_data$glucose_CSF)
 
 #function to calculcate correlation test for each variable with age
 cor_fun <- function(data, var) {
@@ -245,18 +351,36 @@ cor_fun <- function(data, var) {
 }
 
 
-# regressed out dx_icd_level2
-cor_age_regress <-
-  lapply(vars_cor, FUN = function(x) cor_fun(data = combined_regress_age, var = x)) |>
+# function fo t test and cohens d (which is independent of the scale compared to t test estimate)
+my_t_test <- function(data, var) {
+  my_formula <-  paste0(var, "~ sex")
+  t_res <-  t.test(as.formula(my_formula), data = data)
+  cohen_res <- rstatix::cohens_d(as.formula(my_formula), data = data)
+  tidy(t_res) |>
+    mutate(cohens_d = cohen_res$effsize)
+}
+
+
+## # regressed out dx_icd_level2
+## stat_sex_regress <-
+##   lapply(vars_cor, FUN = function(x) my_t_test(data = combined_regress_age_dx_icd_level2, var = x)) |>
+##   set_names(vars_cor) |>
+##   bind_rows(.id = "var")|>
+##   mutate(p_adjust = p.adjust(p.value, method = "BH", n = length(vars_cor)), 2) |>
+##   select(var, estimate, cohens_d, p.value, p_adjust)
+
+stat_sex_regress_ctrl <-
+  lapply(vars_cor, FUN = function(x) my_t_test(data = combined_ctrl_regress_age_dx_icd_level2, var = x)) |>
   set_names(vars_cor) |>
   bind_rows(.id = "var")|>
   mutate(p_adjust = p.adjust(p.value, method = "BH", n = length(vars_cor)), 2) |>
-  arrange(desc(abs(estimate)))
+  select(var, estimate, cohens_d, p.value, p_adjust)
 
-# volcano plot of correlation with age
-cor_age_regress |>
+#volcano plot of sex differences with dx_icd_level regress
+## stat_sex_regress |>
+stat_sex_regress_ctrl |>
   mutate(neg_log10_qval = -log10(p_adjust)) |>
-  ggplot(aes(x = estimate, y = neg_log10_qval, label = var)) +
+  ggplot(aes(x = cohens_d, y = neg_log10_qval, label = var)) +
   geom_point() +
   ggrepel::geom_text_repel() +
   geom_hline(yintercept = -log10(0.001), color = "blue", linetype = "dashed")+ #horizontal line p unadjusted
@@ -266,29 +390,39 @@ cor_age_regress |>
   theme(legend.position = "none") +
   theme_bw()
 
-ggsave(file.path("analysis", "relative", "correlation", "correlation_age_regress.pdf"), width = 12, height = 13)
+ggsave(file.path("analysis", "relative", "correlation", "stat_sex_regress_ctrl.pdf"), width = 12, height = 13)
 
-#unregressed data
-cor_age <-
-  lapply(vars_cor, FUN = function(x) cor_fun(data = combined_data, var = x)) |>
-  set_names(vars_cor) |>
-  bind_rows(.id = "var")|>
-  mutate(p_adjust = p.adjust(p.value, method = "BH", n = length(vars_cor)), 2) |>
-  arrange(desc(abs(estimate)))
+combined_ctrl_regress_age_dx_icd_level2 |>
+  dplyr::filter(!is.na(sex)) |>
+  ggplot(aes(x = sex, y = albumin_CSF)) +
+  geom_boxplot()
 
-cor_age |>
-  mutate(neg_log10_qval = -log10(p_adjust)) |>
-  ggplot(aes(x = estimate, y = neg_log10_qval, label = var)) +
-  geom_point() +
-  ggrepel::geom_text_repel() +
-  geom_hline(yintercept = -log10(0.001), color = "blue", linetype = "dashed")+ #horizontal line p unadjusted
-  geom_vline(xintercept = 0, color = "red", linetype = "dashed")+ #vertical line
-  xlab("correlation coefficient")+
-  ylab(bquote(-Log[10]~ "adjusted p value")) +
-  theme(legend.position = "none") +
-  theme_bw()
+ggsave(file.path("analysis", "relative", "correlation", "stat_sex_regress_bp.pdf"), width = 5, height = 5)
 
-ggsave(file.path("analysis", "relative", "correlation", "correlation_age.pdf"), width = 12, height = 13)
+## sex differences without regressionr
+## stat_sex <-
+##   lapply(vars_cor, FUN = function(x) my_t_test(data = combined_data, var = x)) |>
+##   set_names(vars_cor) |>
+##   bind_rows(.id = "var")|>
+##   mutate(p_adjust = p.adjust(p.value, method = "BH", n = length(vars_cor)), 2) |>
+##   select(var, estimate, cohens_d, p.value, p_adjust)
+
+## #volcano plot of sex differences with dx_icd_level regress
+## #right is female
+## stat_sex |>
+##   mutate(neg_log10_qval = -log10(p_adjust)) |>
+##   ggplot(aes(x = cohens_d, y = neg_log10_qval, label = var)) +
+##   geom_point() +
+##   ggrepel::geom_text_repel() +
+##   geom_hline(yintercept = -log10(0.001), color = "blue", linetype = "dashed")+ #horizontal line p unadjusted
+##   geom_vline(xintercept = 0, color = "red", linetype = "dashed")+ #vertical line
+##   xlab("correlation coefficient")+
+##   ylab(bquote(-Log[10]~ "adjusted p value")) +
+##   theme(legend.position = "none") +
+##   theme_bw()
+
+## ggsave(file.path("analysis", "relative", "correlation", "stat_sex.pdf"), width = 12, height = 13)
+
 
 ## cor_age_data <-
 ##     bind_rows(csf_data, blood_data) |>
@@ -1112,39 +1246,52 @@ quickmarkers_combined_var <- SoupX::quickMarkers(combined_matrix, combined_umap_
 
 lapply(as.character(1:8), topBarPlot, data = quickmarkers_combined_var, tfidf_cut = 0.4, qval_cutoff = 0.001)
 
-## quickmarkers_res_combined <- SoupX::quickMarkers(combined_matrix, combined_umap_full$cluster, FDR = 0.01, N = 100, expressCut = 0.9) |>
-##     tibble()
+# or as a dotplot
+quickmarkers_res_combined <- SoupX::quickMarkers(combined_matrix, combined_umap_full$cluster, FDR = 0.01, N = 100, expressCut = 0.9) |>
+    tibble()
 
-## # order of variables using hclust
-## quickmarkers_order_combined <-
-##     quickmarkers_res_combined |>
-##     dplyr::select(gene, cluster, tfidf) |>
-##     dplyr::mutate(cluster = paste0("cl", cluster)) |>
-##     pivot_wider(names_from = "cluster", values_from = "tfidf") |>
-##     ## dplyr::mutate(combined = coalesce(cl1, cl2, cl3, cl4, cl5, cl6, cl7, cl8), .before = 1)
-##     dplyr::mutate(combined = do.call(coalesce, across(where(is.numeric))), .before = 1) |>
-##     column_to_rownames("gene") |>
-##     dist(method = "euclidean") |>
-##     hclust("ward.D2")
+# order of variables using hclust
+quickmarkers_order_combined <-
+    quickmarkers_res_combined |>
+    dplyr::select(gene, cluster, tfidf) |>
+    dplyr::mutate(cluster = paste0("cl", cluster)) |>
+    pivot_wider(names_from = "cluster", values_from = "tfidf") |>
+    ## dplyr::mutate(combined = coalesce(cl1, cl2, cl3, cl4, cl5, cl6, cl7, cl8), .before = 1)
+    dplyr::mutate(combined = do.call(coalesce, across(where(is.numeric))), .before = 1) |>
+    column_to_rownames("gene") |>
+    dist(method = "euclidean") |>
+    hclust("ward.D2")
 
-## #dotplot quickmarkers
-## quickmarkers_res_combined |>
-##     dplyr::select(gene, cluster, tfidf, qval) |>
-##     dplyr::rename(variable = gene) |>
-##     dplyr::mutate(cluster = factor(cluster, levels = as.character(1:length(cluster))))|>
-##     dplyr::mutate(variable = factor(variable, levels = quickmarkers_order_combined$labels[quickmarkers_order_combined$order])) |>
-##     dplyr::mutate(qval = if_else(qval < 1e-320, 1e-320, qval)) |>
-##     dplyr::mutate(qval = -log10(qval)) |>
-##     dplyr::filter(tfidf > 0.5) |>
-##     dplyr::mutate(qval > -log10(0.05)) |>
-##     ggplot(aes(x = cluster, y = variable, size = tfidf, color = qval)) +
-##     geom_point() +
-## #    scale_size_area() +
-##     viridis::scale_color_viridis() +
-##     theme_classic() +
-##     theme(panel.border = element_rect(color = "black", size = 1, fill = NA))
+quickmarkers_res_combined |>
+  select(gene, cluster, tfidf, geneFrequency)
 
-## ggsave(file.path("analysis", "relative", "top", "top_dotplot_umap_combined_quickmarkers.pdf"), width = 4, height = 7)
+
+DT::datatable(quickmarkers_res_combined)
+
+names(quickmarkers_res_combined)
+
+#dotplot quickmarkers
+quickmarkers_res_combined |>
+  dplyr::select(gene, cluster, tfidf, qval, geneFrequency) |>
+  dplyr::rename(variable = gene) |>
+  dplyr::mutate(cluster = factor(cluster, levels = as.character(1:length(cluster))))|>
+  dplyr::mutate(variable = factor(variable, levels = quickmarkers_order_combined$labels[quickmarkers_order_combined$order])) |>
+  dplyr::mutate(qval = if_else(qval < 1e-320, 1e-320, qval)) |>
+  dplyr::mutate(log10_qval = -log10(qval)) |>
+  dplyr::filter(tfidf > 0.6) |>
+  dplyr::mutate(qval > -log10(0.05)) |>
+  ggplot(aes(x = cluster, y = variable, size = tfidf, color = log10_qval)) +
+  geom_point() +
+  #    scale_size_area() +
+  viridis::scale_color_viridis() +
+  theme_classic() +
+  theme(panel.border = element_rect(color = "black", size = 1, fill = NA)) +
+  labs(x = "cluster",
+       y= "",
+       color  = bquote(-Log[10]~ "qval"),
+       size = "TF-IDF")
+
+ggsave(file.path("analysis", "relative", "top", "top_dotplot_umap_combined_quickmarkers.pdf"), width = 4, height = 7)
 
 
 # save umap combined ------------------------------------------
