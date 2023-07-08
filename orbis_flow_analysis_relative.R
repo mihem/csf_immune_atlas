@@ -22,7 +22,7 @@ phmap_colors <- colorRampPalette(rev(brewer.pal(n = 8, name = "RdBu")))(100) #ni
 
 #large sequential color palette
 set.seed(123)
-my_cols <- unname(createPalette(1000, RColorBrewer::brewer.pal(8, "Set2")))
+my_cols <- unname(createPalette(100, RColorBrewer::brewer.pal(8, "Set2")))
 
 # section read in final data for analysis ------------------------------------------
 all_data_one_fil <- qs::qread("final_one_rel.qs")
@@ -345,6 +345,10 @@ shapiro.test(combined_data$monos_CSF[1:5000])
 library(nortest)
 nortest::ad.test(combined_data$glucose_CSF)
 
+ggplot(combined_data, aes(sample = monos_CSF))+
+  stat_qq() +
+  stat_qq_line()
+
 #function to calculcate correlation test for each variable with age
 cor_fun <- function(data, var) {
     tidy(cor.test(x = data[[var]], y =data[["age"]], use = "complete.obs", method = "spearman"))
@@ -377,6 +381,7 @@ stat_sex_regress_ctrl <-
   select(var, estimate, cohens_d, p.value, p_adjust)
 
 #volcano plot of sex differences with dx_icd_level regress
+
 ## stat_sex_regress |>
 stat_sex_regress_ctrl |>
   mutate(neg_log10_qval = -log10(p_adjust)) |>
@@ -2032,6 +2037,8 @@ ggsave(file.path("analysis", "relative", "models", "combined_rf_vip.pdf"), width
 # patients with more than one lumbar puncture ------------------------------------------
 # remove if no aufnahme date present, around 2000 cases
 # calculate time between first sample measure data and all following (convert to numeric for future analysis), absolute because of technical error
+all_data <- read_csv("orbis_flow_rel.csv")
+
 all_data_multi <-
   all_data |>
   tidyr::drop_na(aufnahme, measure_date_orbis) |>
@@ -2040,7 +2047,6 @@ all_data_multi <-
   dplyr::mutate(interval = abs(as.numeric(difftime(measure_date, min(aufnahme), units = "days")))) |>
   dplyr::ungroup() |>
   dplyr::mutate(patient_id = as.character(patient_id))
-
 
 # sanity check
 all_data_multi |>
@@ -2073,6 +2079,15 @@ data_combined_multi <-
   rename_with(function(x) str_remove(x, "_CSF"), c(protein_CSF_CSF:IgM_ratio_CSF, glucose_CSF_CSF))
 
 qs::qsave(data_combined_multi, "final_multi_comb_rel.qs")
+
+data_combined_multi_norm <-
+  data_combined_multi |>
+    ## drop_na() |>
+    recipes::recipe(sample_pair_id ~ .) |>
+    bestNormalize::step_orderNorm(granulos_CSF:lactate_CSF) |>
+    recipes::prep() |>
+    recipes::bake(new_data = NULL)
+
 
 # absolute numbers for longitudinal analysis  ------------------------------------------
 # remove all columns that are not finite
@@ -2136,13 +2151,13 @@ qs::qsave(data_combined_multi_abs, "final_multi_comb_abs.qs")
 ##   recipes::prep() |>
 ##   recipes::bake(new_data = NULL)
 
-LinePlot <- function(data, diagnosis, all_pars, par, xlim_end, method) {
+LinePlot <- function(data, diagnosis, cols, par, xlim_end, method) {
   #rfilter certain diagnosis and only keep values before a certain interval
   #remove all values that do not have at least two measurements in this interval
   # make interval discrete for boxplots
   df <-
     data |>
-    dplyr::filter(dx_icd_level2 == diagnosis) |>
+    dplyr::filter(dx_icd_level2 %in% diagnosis) |>
     dplyr::filter(interval < xlim_end) |>
     dplyr::group_by(patient_id) |>
     dplyr::filter(n() > 1) |>
@@ -2162,91 +2177,141 @@ LinePlot <- function(data, diagnosis, all_pars, par, xlim_end, method) {
 
   res_plot <-
     df |>
-    ggplot(aes(x = interval, y = .data[[par]])) +
-    ## geom_boxplot(aes(group = interval_cut)) +
-    geom_line(aes(color = patient_id), alpha = 0.3) +
-    geom_point(aes(color = patient_id), alpha = 0.3) +
+    ggplot(aes(x = interval, y = .data[[par]], color = dx_icd_level2, fill = dx_icd_level2)) +
+    ## geom_line(alpha = 0.3) +
+    ## geom_line(aes(color = patient_id), alpha = 0.3) +
+    ## geom_point(aes(color = patient_id), alpha = 0.3) +
+    geom_point(alpha = 0.5, size = 0.5) +
     theme_bw() +
     xlab("days") +
     ylab("") +
-    geom_smooth(method = "loess", se = TRUE) +
+    geom_smooth(method = "loess", se = TRUE, span = 1.0) +
     theme(legend.position = "none") +
-    ggtitle(glue::glue("{par}")) +
-    ## ggtitle(glue::glue("{par}, r = {cor_res$estimate}, p = {cor_res$p_adjust}")) +
-    scale_color_manual(values = my_cols)
+    ggtitle(glue::glue("{par}"))
+    scale_color_manual(values = cols)
 
 return(res_plot)
 }
 
-count(data_combined_multi, dx_icd_level2) |>
-  arrange(desc(n))
 
-debugonce(LinePlot)
+count(data_combined_multi_norm, dx_icd_level2) |>
+  arrange(desc(n)) |>
+  dplyr::filter(n > 10) |>
+  print(n = Inf)
 
-interval_bac_meningitis <-
+#bac, viral, iih manuell überprüfen?
+
+combined_vars <-
+  data_combined_multi_norm |>
+  select(granulos_CSF:lactate_CSF) |>
+  select(-OCB_CSF) |>
+  names()
+
+
+interval_cols <- setNames(RColorBrewer::brewer.pal(3, "Set2"), c("viral encephalitis", "bacterial meningitis"))
+## interval_cols <- setNames(RColorBrewer::brewer.pal(3, "Set2"), c("viral encephalitis", "bacterial meningitis", "idiopathic intracranial hypertension"))
+## interval_cols <- setNames(RColorBrewer::brewer.pal(3, "Set2"), c("viral encephalitis", "bacterial meningitis", "ischemic stroke"))
+
+#remove unplausible lactate value
+data_combined_multi <-
+  data_combined_multi |>
+  dplyr::mutate(lactate_CSF = ifelse(lactate_CSF > 10, NA, lactate_CSF))
+
+
+interval_rel <-
   lapply(combined_vars,
-         FUN = function(x) LinePlot(data = data_combined_multi_abs,
-                                    diagnosis = "bacterial meningitis",
+         FUN = function(x) LinePlot(data = data_combined_multi,
+                                    diagnosis = c("bacterial meningitis", "viral encephalitis"),
+                                    ## diagnosis = c("idiopathic intracranial hypertension", "bacterial meningitis", "viral encephalitis"),
+                                    ## diagnosis = c("ischemic stroke", "bacterial meningitis", "viral encephalitis"),
+                                    cols = interval_cols,
                                     par = x,
-                                    all_pars = combined_vars,
-                                    xlim_end = 50,
+                                    xlim_end = 30,
                                     method = "pearson"
                                     ))
 
-bac_plot <- patchwork::wrap_plots(interval_bac_meningitis, ncol = 4)
-ggsave(plot = bac_plot, file.path("analysis", "relative", "interval", "bac_meningitis_abs.pdf"), width = 15, height = 60, limitsize = FALSE)
-
-interval_viral_encephalitis <-
-  lapply(combined_vars,
-         FUN = function(x) LinePlot(data = data_combined_multi_abs,
-                                    diagnosis = "viral encephalitis",
-                                    par = x,
-                                    all_pars = combined_vars,
-                                    xlim_end = 50,
-                                    method = "pearson"
-                                    ))
-
-viral_encephalitis_plot <- patchwork::wrap_plots(interval_viral_encephalitis, ncol = 4)
-ggsave(plot = viral_encephalitis_plot, file.path("analysis", "relative", "interval", "viral_encephalitis_abs.pdf"), width = 15, height = 60, limitsize = FALSE)
-
-interval_multiple_sclerosis <-
-  lapply(combined_vars,
-         FUN = function(x) LinePlot(data = data_combined_multi_abs_norm,
-                                    diagnosis = "multiple sclerosis",
-                                    par = x,
-                                    all_pars = combined_vars,
-                                    xlim_end = 10000,
-                                    method = "pearson"
-                                    ))
-
-multiple_sclerosis_plot <- patchwork::wrap_plots(interval_multiple_sclerosis, ncol = 4)
-ggsave(plot = multiple_sclerosis_plot, file.path("analysis", "relative", "interval", "multiple_sclerosis_abs_norm.pdf"), width = 17, height = 60, limitsize = FALSE)
+interval_rel_plot <- patchwork::wrap_plots(interval_rel, ncol = 4)
+ggsave(plot = interval_rel_plot, file.path("analysis", "relative", "interval", "interval_rel.pdf"), width = 15, height = 60, limitsize = FALSE)
 
 
-#inflammatory demyelinating polyneuropathy
-interval_inflammatory_demyelinating_pnp <-
-  lapply(combined_vars,
-         FUN = function(x) LinePlot(data = data_combined_multi_abs_norm,
-                                    diagnosis = "inflammatory demyelinating neuropathy",
-                                    par = x,
-                                    all_pars = combined_vars,
-                                    xlim_end = 1000,
-                                    method = "pearson"
-                                    ))
+## interval_abs <-
+##   lapply(combined_vars,
+##          FUN = function(x) LinePlot(data = data_combined_multi_abs,
+##                                     diagnosis = c("bacterial meningitis", "viral encephalitis", "idiopathic intracranial hypertension"),
+##                                     cols = interval_cols,
+##                                     par = x,
+##                                     xlim_end = 50,
+##                                     method = "pearson"
+##                                     ))
 
-inflammatory_demyelinating_pnp_plot <- patchwork::wrap_plots(interval_inflammatory_demyelinating_pnp, ncol = 4)
-ggsave(plot = inflammatory_demyelinating_pnp_plot, file.path("analysis", "relative", "interval", "inflammatory_demyelinating_pnp_abs_norm.pdf"), width = 17, height = 60, limitsize = FALSE)
+## interval_abs_plot <- patchwork::wrap_plots(interval_abs, ncol = 4)
+## ggsave(plot = interval_abs_plot, file.path("analysis", "relative", "interval", "interval_abs.pdf"), width = 15, height = 60, limitsize = FALSE)
 
-# idiopathy intra cranial hypertension
-interval_intracranial_hypertension <-
-  lapply(combined_vars,
-         FUN = function(x) LinePlot(data = data_combined_multi_abs_norm,
-                                    diagnosis = "idiopathic intracranial hypertension",
-                                    par = x,
-                                    all_pars = combined_vars,
-                                    xlim_end = 10000,
-                                    method = "pearson"
-                                    ))
 
-intracranial_hypertension_plot <- patchwork::wrap_plots(interval_intracranial_hypertension, ncol = 4)
-ggsave(plot = intracranial_hypertension_plot, file.path("analysis", "relative", "interval", "intracranial_hypertension_abs_norm.pdf"), width = 17, height = 60, limitsize = FALSE)
+## interval_bac_meningitis <-
+##   lapply(combined_vars,
+##          FUN = function(x) LinePlot(data = data_combined_multi_abs,
+##                                     diagnosis = "bacterial meningitis",
+##                                     par = x,
+##                                     all_pars = combined_vars,
+##                                     xlim_end = 50,
+##                                     method = "pearson"
+##                                     ))
+
+## bac_plot <- patchwork::wrap_plots(interval_bac_meningitis, ncol = 4)
+## ggsave(plot = bac_plot, file.path("analysis", "relative", "interval", "bac_meningitis_abs.pdf"), width = 15, height = 60, limitsize = FALSE)
+
+## interval_viral_encephalitis <-
+##   lapply(combined_vars,
+##          FUN = function(x) LinePlot(data = data_combined_multi_abs,
+##                                     diagnosis = "viral encephalitis",
+##                                     par = x,
+##                                     all_pars = combined_vars,
+##                                     xlim_end = 50,
+##                                     method = "pearson"
+##                                     ))
+
+## viral_encephalitis_plot <- patchwork::wrap_plots(interval_viral_encephalitis, ncol = 4)
+## ggsave(plot = viral_encephalitis_plot, file.path("analysis", "relative", "interval", "viral_encephalitis_abs.pdf"), width = 15, height = 60, limitsize = FALSE)
+
+## interval_multiple_sclerosis <-
+##   lapply(combined_vars,
+##          FUN = function(x) LinePlot(data = data_combined_multi_abs_norm,
+##                                     diagnosis = "multiple sclerosis",
+##                                     par = x,
+##                                     all_pars = combined_vars,
+##                                     xlim_end = 10000,
+##                                     method = "pearson"
+##                                     ))
+
+## multiple_sclerosis_plot <- patchwork::wrap_plots(interval_multiple_sclerosis, ncol = 4)
+## ggsave(plot = multiple_sclerosis_plot, file.path("analysis", "relative", "interval", "multiple_sclerosis_abs_norm.pdf"), width = 17, height = 60, limitsize = FALSE)
+
+
+## #inflammatory demyelinating polyneuropathy
+## interval_inflammatory_demyelinating_pnp <-
+##   lapply(combined_vars,
+##          FUN = function(x) LinePlot(data = data_combined_multi_abs_norm,
+##                                     diagnosis = "inflammatory demyelinating neuropathy",
+##                                     par = x,
+##                                     all_pars = combined_vars,
+##                                     xlim_end = 1000,
+##                                     method = "pearson"
+##                                     ))
+
+## inflammatory_demyelinating_pnp_plot <- patchwork::wrap_plots(interval_inflammatory_demyelinating_pnp, ncol = 4)
+## ggsave(plot = inflammatory_demyelinating_pnp_plot, file.path("analysis", "relative", "interval", "inflammatory_demyelinating_pnp_abs_norm.pdf"), width = 17, height = 60, limitsize = FALSE)
+
+## # idiopathy intra cranial hypertension
+## interval_intracranial_hypertension <-
+##   lapply(combined_vars,
+##          FUN = function(x) LinePlot(data = data_combined_multi_abs_norm,
+##                                     diagnosis = "idiopathic intracranial hypertension",
+##                                     par = x,
+##                                     all_pars = combined_vars,
+##                                     xlim_end = 10000,
+##                                     method = "pearson"
+##                                     ))
+
+## intracranial_hypertension_plot <- patchwork::wrap_plots(interval_intracranial_hypertension, ncol = 4)
+## ggsave(plot = intracranial_hypertension_plot, file.path("analysis", "relative", "interval", "intracranial_hypertension_abs_norm.pdf"), width = 17, height = 60, limitsize = FALSE)
