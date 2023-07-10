@@ -56,7 +56,22 @@ sum(all_data_one_fil$csf$event_count)# 233 million events
 #all_data <- read_csv("orbis_flow_rel.csv")
 all_data_one <- read_csv("orbis_flow_rel_one.csv")
 all_data <- read_csv("orbis_flow_rel.csv")
+str(all_data)
 
+min(all_data$measure_date_orbis, na.rm = TRUE)
+max(all_data$measure_date_orbis, na.rm = TRUE)
+
+min(all_data_one_fil$blood$age, na.rm = TRUE)
+max(all_data_one_fil$blood$age, na.rm = TRUE)
+
+
+all_data_one_fil$blood |>
+  dplyr::filter(age < 18) |>
+  dplyr::arrange(age) |>
+  select(patient_id, age, dx_icd_level2, hd)
+
+
+names(all_data_one_fil$blood)
 
 all_data |>
     dplyr::group_by(patient_id, tissue) |>
@@ -1436,7 +1451,8 @@ qs::qsave(combined_ratio_umap_full, "final_one_rel_umap_combined_ratio.qs")
 
 
 
-# compare with biobank  ------------------------------------------
+ # compare with biobank  ------------------------------------------
+
 top_dx_icd_level2 <-
   combined_norm_complete |>
   count(dx_icd_level2) |>
@@ -1445,16 +1461,37 @@ top_dx_icd_level2 <-
   slice(1:10) |>
   pull(dx_icd_level2)
 
+top_dx_icd_level2_manual <- c("somatoform", "multiple sclerosis", "dementia", "ischemic stroke", "Parkinson’s syndrome", "opticus neuritis", "transient ischemic attack", "viral encephalitis", "bacterial meningitis")
+
+
+dplyr::count(combined_norm_complete, dx_biobanklist_level2) |>
+  arrange(desc(n)) |>
+  write_csv(file.path("biobank", "biobank_dx.csv"))
+
+## write_csv(tibble(dx = unique(combined_norm_complete$dx_biobanklist_level2)), "biobank/biobank_dx.csv")
+
+biobank_lookup <- read_csv(file.path("biobank", "biobank_dx_lookup.csv")) |>
+  dplyr::filter(group != "remove") |>
+  select(-n)
+
+read_csv(file.path("biobank", "biobank_dx_lookup.csv")) |>
+  dplyr::filter(group != "remove") |>
+  select(n) |>
+  sum()
+
 freq_dx_icd_biobank <-
   combined_norm_complete |>
-  dplyr::filter(dx_icd_level2 %in% top_dx_icd_level2) |>
-  drop_na(dx_biobanklist_level2) |>
-  count(dx_icd_level2, dx_biobanklist_level2)
+  dplyr::filter(dx_icd_level2 %in% top_dx_icd_level2_manual) |>
+  left_join(biobank_lookup, by = c("dx_biobanklist_level2")) |>
+  count(dx_icd_level2, group) |>
+  drop_na(group)
 
+#plot heatmap, arrange by specific order
 freq_dx_icd_biobank_phmap <-
   freq_dx_icd_biobank |>
-  pivot_wider(names_from = dx_biobanklist_level2, values_from = n, values_fill = 0) |>
-  dplyr::filter(!is.na(dx_icd_level2)) |>
+  arrange(match(group, top_dx_icd_level2_manual)) |>
+  pivot_wider(names_from = group, values_from = n, values_fill = 0) |>
+  arrange(match(dx_icd_level2, top_dx_icd_level2_manual)) |>
   column_to_rownames(var = "dx_icd_level2") |>
   pheatmap(
     scale = "row",
@@ -1463,7 +1500,7 @@ freq_dx_icd_biobank_phmap <-
     border_color = NA,
     color = phmap_colors,
     cellwidth = 10,
-    cellheight = 10
+    cellheight = 10,
     )
 
 grDevices::cairo_pdf(
