@@ -57,6 +57,14 @@ sum(all_data_one_fil$csf$event_count)# 233 million events
 all_data_one <- read_csv("orbis_flow_rel_one.csv")
 all_data <- read_csv("orbis_flow_rel.csv")
 str(all_data)
+skimr::skim(all_data)
+
+
+all_data |>
+  select(patient_id, tissue, dx_biobanklist_level2) |>
+  drop_na(dx_biobanklist_level2) |>
+  distinct(patient_id, .keep_all = TRUE)
+
 
 min(all_data$measure_date_orbis, na.rm = TRUE)
 max(all_data$measure_date_orbis, na.rm = TRUE)
@@ -1162,55 +1170,135 @@ quickmarkers_res_blood |>
     theme(panel.border = element_rect(color = "black", size = 1, fill = NA))
 
 ggsave(file.path("analysis", "relative", "top", "top_dotplot_umap_blood_quickmarkers.pdf"), width = 3.5, height = 3)
+names(combined_norm_complete)
+
+sum(is.na(combined_norm_complete$geschlecht))
+str(combined_norm_complete$geschlecht)
+
+## names(combined_norm_complete)
+
+## vars_umap <-
+##   combined_norm_complete |>
+##   select(granulos_CSF:lactate_CSF) |>
+##   names()
+
+## combined_norm_regress <-
+##   combined_norm_complete |>
+##   datawizard::adjust(effect = c("age",  "geschlecht"), select = vars_umap, keep_intercept = TRUE) |>
+##   tibble()
 
 #  section UMAP COMBINED  ------------------------------------------
 set.seed(123)
-combined_umap <- combined_norm_complete |>
-    select(granulos_CSF:lactate_CSF) |>
-    select(-OCB_CSF) |>
-    uwot::umap(scale = FALSE, pca = NULL, metric = "cosine", n_neighbors = 30, min_dist = 0.01) |>
-#    uwot::umap(scale = FALSE, pca = NULL, metric = "euclidean", n_neighbors = 30, min_dist = 0.01) |>
-    as_tibble() |>
-    rename(UMAP1 = V1, UMAP2 = V2)
+combined_umap <-
+  combined_norm_complete |>
+  ## combined_norm_regress |>
+  select(granulos_CSF:lactate_CSF) |>
+  select(-OCB_CSF) |>
+  uwot::umap(scale = FALSE, pca = NULL, metric = "cosine", n_neighbors = 30, min_dist = 0.01) |>
+  #    uwot::umap(scale = FALSE, pca = NULL, metric = "euclidean", n_neighbors = 30, min_dist = 0.01) |>
+  as_tibble() |>
+  rename(UMAP1 = V1, UMAP2 = V2)
 
-#kmeans clustering
-set.seed(123)
-cl_combined_kmeans <- combined_norm_complete |>
-    select(granulos_CSF:lactate_CSF) |>
-#    select(-OCB_CSF) |>
-    stats::kmeans(centers = 8, iter.max = 30, algorithm = "Hartigan-Wong")
-
+## #kmeans clustering
 ## set.seed(123)
-## cl_combined_hclust <-
-##     combined_norm_complete |>
+## cl_combined_kmeans <- combined_norm_complete |>
 ##     select(granulos_CSF:lactate_CSF) |>
 ## #    select(-OCB_CSF) |>
-##     dist(method = "euclidean") |>
-##     hclust("ward.D2") |>
-##     cutree(k = 10)
+##     stats::kmeans(centers = 8, iter.max = 30, nstart = 25, algorithm = "Hartigan-Wong")
+
+## # find the right amount of clusters in kmeans
+## # https://stackoverflow.com/questions/15376075/cluster-analysis-in-r-determine-the-optimal-number-of-clusters
+
+## library(mclust)
+## # Run the function to see how many clusters
+## # it finds to be optimal, set it to search for
+## # at least 1 model and up 20.
+
+
+## set.seed(123)
+## cl_combined_mclust <- combined_norm_complete |>
+##   select(granulos_CSF:lactate_CSF) |>
+##   Mclust(G=1:20)
+
+## m_best <- dim(cl_combined_mclust$z)[2]
+
+## plot(cl_combined_mclust)
+
+
+
+## #finding right number of clustes
+## cl_combined_kmeans_wss <-
+##   combined_norm_complete |>
+##   select(granulos_CSF:lactate_CSF) |>
+##   fviz_nbclust(kmeans, method = "wss")
+## #maybe 3-5 not very clear
+
+## cl_combined_kmeans_silhouette <-
+##   combined_norm_complete |>
+##   select(granulos_CSF:lactate_CSF) |>
+##   fviz_nbclust(kmeans, method = "silhouette")
+## #2
+
+
+## set.seed(123)
+## combined_kmeans_gap <-
+##   combined_norm_complete |>
+##   select(granulos_CSF:lactate_CSF) |>
+##   cluster::clusGap(kmeans, K.max = 15, nstart = 25, B = 500)
+## #high variance
+
+## qs::qsave(combined_kmeans_gap, "umap_combined_kmeans_gap.qs")
+
+## print(combined_kmeans_gap, method = "firstmax")
+## print(combined_kmeans_gap, method = "Tibs2001SEmax")
+## print(combined_kmeans_gap, method = "firstSEmax")
+## fviz_gap_stat(combined_kmeans_gap)
+
+#ari only works if you know the ground truth
+## mclust::adjustedRandIndex(cl_csf_gap$Best.partition, cl_combined_kmeans$cluster)
+
 
 set.seed(123)
 cl_combined_phenograph <-
     combined_norm_complete |>
     select(granulos_CSF:lactate_CSF) |>
-    Rphenoannoy::Rphenoannoy(k = 20, trees = 150)
+    Rphenoannoy::Rphenoannoy(k = 60, trees = 300)
 
-#manually change gates from phenograph, merge small and similar clusters
-table(cl_combined_phenograph$community$membership)
-cl_combined_phenograph$community$membership[cl_combined_phenograph$community$membership == "12"] <- 8
+#cl3 inflammatory
+#cl1 healthy_CSF
+#cl2 neuropathy
+#cl4 neurodegenerative1
+#cl5 neurodegenerative2
+#cl6 infectious
+#cl7 opticus_neuritis
+
+lookup_cluster <-
+  tibble(
+    value = c(1, 2, 3, 4, 5, 6, 7),
+    cluster_name = c("healthy CSF", "neuropathy", "inflammatory", "neurodegenerative1", "neurodegenerative2", "infectious", "optic neuritis")
+  )
+
+cluster_levels <- c("inflammatory", "healthy CSF", "neuropathy", "infectious", "optic neuritis", "neurodegenerative1", "neurodegenerative2")
+
+combined_phenograph <-
+  cl_combined_phenograph$community$membership |>
+  as_tibble() |>
+  left_join(lookup_cluster, by = c("value")) |>
+  mutate(cluster_name = factor(cluster_name, levels = cluster_levels))
 
 #combine umap, cluster and metadata
-combined_umap_full <- bind_cols(combined_umap, combined_norm_complete, cluster = factor(cl_combined_kmeans$cluster))
-## combined_umap_full <- bind_cols(combined_umap, combined_norm_complete, cluster = factor(cl_combined_phenograph$community$membership))
+## combined_umap_full <- bind_cols(combined_umap, combined_norm_complete, cluster = factor(cl_combined_kmeans$cluster))
+combined_umap_full <- bind_cols(combined_umap, combined_norm_complete, cluster = combined_phenograph$cluster_name)
 
 #  section feature plots umap combined ------------------------------------------
 #plot cluster
 FPlot(feature = "cluster", data = combined_umap_full, scale = "cluster", alpha = .5, size = 1)
-ggsave(file.path("analysis", "relative", "umap", "combined_umap_cluster_kmeans.pdf"), width = 6, height = 5)
+ggsave(file.path("analysis", "relative", "umap", "combined_umap_cluster_phenograph.pdf"), width = 7, height = 6)
 ## ggsave(file.path("analysis", "relative", "umap", "combined_umap_cluster_phenograph.pdf"), width = 6, height = 5)
 
 #categories feature plots
 categories <- c("dx_icd_level1", "dx_icd_level2", "dx_biobanklist_level1", "dx_biobanklist_level2", "dx_andi_level1", "dx_andi_level2", "dx_andi_level3")
+categories <- c("dx_icd_level2")
 lapply(categories, FPlot_dx, data = combined_umap_full)
 
 #plot factors
@@ -1233,6 +1321,7 @@ ggsave(file.path("analysis", "relative", "feature", "fplot_var_combined_umap_fea
 FPlot(feature = "age", data = combined_umap_full, scale = "con", size = 0.3, alpha =.5)
 ggsave(file.path("analysis", "relative", "feature", "fplot_var_combined_umap_age.png"), width = 2.5, height = 2)
 
+
 #  section abundance umap combined ------------------------------------------
 ## lapply(categories, dotPlot_cluster, data = combined_umap_full)
 
@@ -1247,11 +1336,18 @@ combined_dx_icd_level2_matrix <-
   as.matrix() |>
   t()
 
+rownames(combined_dx_icd_level2_matrix) <- gsub(x = rownames(combined_dx_icd_level2_matrix), pattern = "\\.", replacement = " ")
+
 abundance_combined_soupx <-
   SoupX::quickMarkers(combined_dx_icd_level2_matrix, combined_umap_full$cluster, FDR = 0.1, N = 100, expressCut = 0.9) |>
   tibble()
 
-lapply(as.character(1:8), abundanceCategoryPlot, data = abundance_combined_soupx)
+lapply(lookup_cluster$cluster_name, abundanceCategoryPlot, data = abundance_combined_soupx)
+
+rownames(combined_dx_icd_level2_matrix)
+
+names(combined_umap_full)
+str(combined_dx_icd_level2_matrix)
 
 #  section topmarkers for clusters combined ------------------------------------------
 #quickmarkers
@@ -1264,7 +1360,7 @@ combined_matrix <-
 quickmarkers_combined_var <- SoupX::quickMarkers(combined_matrix, combined_umap_full$cluster, FDR = 0.1, N = 100, expressCut = 0.9) |>
     tibble()
 
-lapply(as.character(1:8), topBarPlot, data = quickmarkers_combined_var, tfidf_cut = 0.4, qval_cutoff = 0.001)
+lapply(lookup_cluster$cluster_name, topBarPlot, data = quickmarkers_combined_var, tfidf_cut = 0.4, qval_cutoff = 0.001)
 
 # or as a dotplot
 quickmarkers_res_combined <- SoupX::quickMarkers(combined_matrix, combined_umap_full$cluster, FDR = 0.01, N = 100, expressCut = 0.9) |>
@@ -1274,163 +1370,156 @@ quickmarkers_res_combined <- SoupX::quickMarkers(combined_matrix, combined_umap_
 quickmarkers_order_combined <-
     quickmarkers_res_combined |>
     dplyr::select(gene, cluster, tfidf) |>
-    dplyr::mutate(cluster = paste0("cl", cluster)) |>
-    pivot_wider(names_from = "cluster", values_from = "tfidf") |>
+    pivot_wider(names_from = "cluster", values_from = "tfidf")|>
     ## dplyr::mutate(combined = coalesce(cl1, cl2, cl3, cl4, cl5, cl6, cl7, cl8), .before = 1)
     dplyr::mutate(combined = do.call(coalesce, across(where(is.numeric))), .before = 1) |>
     column_to_rownames("gene") |>
     dist(method = "euclidean") |>
     hclust("ward.D2")
 
-quickmarkers_res_combined |>
-  select(gene, cluster, tfidf, geneFrequency)
-
-
-DT::datatable(quickmarkers_res_combined)
-
-names(quickmarkers_res_combined)
-
 #dotplot quickmarkers
 quickmarkers_res_combined |>
   dplyr::select(gene, cluster, tfidf, qval, geneFrequency) |>
   dplyr::rename(variable = gene) |>
-  dplyr::mutate(cluster = factor(cluster, levels = as.character(1:length(cluster))))|>
+  dplyr::mutate(cluster = factor(cluster, levels = cluster_levels)) |>
   dplyr::mutate(variable = factor(variable, levels = quickmarkers_order_combined$labels[quickmarkers_order_combined$order])) |>
   dplyr::mutate(qval = if_else(qval < 1e-320, 1e-320, qval)) |>
   dplyr::mutate(log10_qval = -log10(qval)) |>
-  dplyr::filter(tfidf > 0.6) |>
-  dplyr::mutate(qval > -log10(0.05)) |>
+  dplyr::filter(tfidf > 0.5)|>
+  dplyr::filter(qval < 1e-10) |>
   ggplot(aes(x = cluster, y = variable, size = tfidf, color = log10_qval)) +
   geom_point() +
   #    scale_size_area() +
   viridis::scale_color_viridis() +
   theme_classic() +
-  theme(panel.border = element_rect(color = "black", size = 1, fill = NA)) +
-  labs(x = "cluster",
+  theme(panel.border = element_rect(color = "black", size = 1, fill = NA),
+        axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.3)) +
+  labs(x = "",
        y= "",
        color  = bquote(-Log[10]~ "qval"),
        size = "TF-IDF")
 
-ggsave(file.path("analysis", "relative", "top", "top_dotplot_umap_combined_quickmarkers.pdf"), width = 4, height = 7)
+ggsave(file.path("analysis", "relative", "top", "top_dotplot_umap_combined_quickmarkers.pdf"), width = 4, height = 8)
 
 
+scMisc::lss()
 # save umap combined ------------------------------------------
 qs::qsave(combined_umap_full, "final_one_rel_umap_combined.qs")
 
-#  section UMAP COMBINED_RATIO  ------------------------------------------
-set.seed(123)
+## #  section UMAP COMBINED_RATIO  ------------------------------------------
+## set.seed(123)
 
-combined_ratio_umap <-
-  combined_ratio_norm |>
-    select(c(granulos_CSF:albumin_ratio, granulos_ratio_norm:IgM_ratio_norm)) |>
-    select(-OCB_CSF) |>
-    uwot::umap(scale = FALSE, pca = NULL, metric = "cosine", n_neighbors = 30, min_dist = 0.01) |>
-#    uwot::umap(scale = FALSE, pca = NULL, metric = "euclidean", n_neighbors = 30, min_dist = 0.01) |>
-    as_tibble() |>
-    rename(UMAP1 = V1, UMAP2 = V2)
+## combined_ratio_umap <-
+##   combined_ratio_norm |>
+##     select(c(granulos_CSF:albumin_ratio, granulos_ratio_norm:IgM_ratio_norm)) |>
+##     select(-OCB_CSF) |>
+##     uwot::umap(scale = FALSE, pca = NULL, metric = "cosine", n_neighbors = 30, min_dist = 0.01) |>
+## #    uwot::umap(scale = FALSE, pca = NULL, metric = "euclidean", n_neighbors = 30, min_dist = 0.01) |>
+##     as_tibble() |>
+##     rename(UMAP1 = V1, UMAP2 = V2)
 
-#kmeans clustering
-set.seed(123)
-cl_combined_ratio_kmeans <-
-  combined_ratio_norm |>
-      select(c(granulos_CSF:albumin_ratio, granulos_ratio_norm:IgM_ratio_norm)) |>
-    stats::kmeans(centers = 8, iter.max = 30, algorithm = "Hartigan-Wong")
+## #kmeans clustering
+## set.seed(123)
+## cl_combined_ratio_kmeans <-
+##   combined_ratio_norm |>
+##       select(c(granulos_CSF:albumin_ratio, granulos_ratio_norm:IgM_ratio_norm)) |>
+##     stats::kmeans(centers = 8, iter.max = 30, algorithm = "Hartigan-Wong")
 
-set.seed(123)
-cl_combined_ratio_phenograph <-
-    combined_ratio_norm_complete |>
-    select(granulos_CSF:lactate_CSF) |>
-    Rphenoannoy::Rphenoannoy(k = 20, trees = 150)
+## set.seed(123)
+## cl_combined_ratio_phenograph <-
+##     combined_ratio_norm_complete |>
+##     select(granulos_CSF:lactate_CSF) |>
+##     Rphenoannoy::Rphenoannoy(k = 20, trees = 150)
 
-#combine umap, cluster and metadata
-combined_ratio_umap_full <- bind_cols(combined_ratio_umap, combined_ratio_norm, cluster = factor(cl_combined_ratio_kmeans$cluster))
-## combined_ratio_umap_full <- bind_cols(combined_ratio_umap, combined_ratio_norm, cluster = factor(cl_combined_ratio_phenograph$community$membership))
+## #combine umap, cluster and metadata
+## combined_ratio_umap_full <- bind_cols(combined_ratio_umap, combined_ratio_norm, cluster = factor(cl_combined_ratio_kmeans$cluster))
+## ## combined_ratio_umap_full <- bind_cols(combined_ratio_umap, combined_ratio_norm, cluster = factor(cl_combined_ratio_phenograph$community$membership))
 
-#  section feature plots umap combined_ratio ------------------------------------------
-#plot cluster
-FPlot(feature = "cluster", data = combined_ratio_umap_full, scale = "cluster", alpha = .5, size = 1)
-ggsave(file.path("analysis", "relative", "umap", "combined_ratio_umap_cluster_kmeans.pdf"), width = 6, height = 5)
-## ggsave(file.path("analysis", "relative", "umap", "combined_ratio_umap_cluster_phenograph.pdf"), width = 6, height = 5)
+## #  section feature plots umap combined_ratio ------------------------------------------
+## #plot cluster
+## FPlot(feature = "cluster", data = combined_ratio_umap_full, scale = "cluster", alpha = .5, size = 1)
+## ggsave(file.path("analysis", "relative", "umap", "combined_ratio_umap_cluster_kmeans.pdf"), width = 6, height = 5)
+## ## ggsave(file.path("analysis", "relative", "umap", "combined_ratio_umap_cluster_phenograph.pdf"), width = 6, height = 5)
 
-#categories feature plots
-categories <- c("dx_icd_level1", "dx_icd_level2", "dx_biobanklist_level1", "dx_biobanklist_level2", "dx_andi_level1", "dx_andi_level2", "dx_andi_level3")
-lapply(categories, FPlot_dx, data = combined_ratio_umap_full)
+## #categories feature plots
+## categories <- c("dx_icd_level1", "dx_icd_level2", "dx_biobanklist_level1", "dx_biobanklist_level2", "dx_andi_level1", "dx_andi_level2", "dx_andi_level3")
+## lapply(categories, FPlot_dx, data = combined_ratio_umap_full)
 
-#plot factors
-combined_ratio_umap_full$OCB_CSF <- factor(combined_ratio_umap_full$OCB_CSF, labels = c("no", "yes"))
-FPlot(feature = "OCB_CSF", data = combined_ratio_umap_full, scale = "cont", size = .2, alpha = 0.5)
-ggsave(file.path("analysis", "relative", "feature", "fplot_var_combined_ratio_umap_ocb.png"), width = 3, height = 2)
+## #plot factors
+## combined_ratio_umap_full$OCB_CSF <- factor(combined_ratio_umap_full$OCB_CSF, labels = c("no", "yes"))
+## FPlot(feature = "OCB_CSF", data = combined_ratio_umap_full, scale = "cont", size = .2, alpha = 0.5)
+## ggsave(file.path("analysis", "relative", "feature", "fplot_var_combined_ratio_umap_ocb.png"), width = 3, height = 2)
 
-#plot umap variables
-umap_combined_ratio_variables <-
-  combined_ratio_umap_full |>
-  select(c(granulos_CSF:albumin_ratio, granulos_ratio_norm:IgM_ratio_norm)) |>
-  select(-OCB_CSF) |>
-  names()
+## #plot umap variables
+## umap_combined_ratio_variables <-
+##   combined_ratio_umap_full |>
+##   select(c(granulos_CSF:albumin_ratio, granulos_ratio_norm:IgM_ratio_norm)) |>
+##   select(-OCB_CSF) |>
+##   names()
 
-combined_ratio_umap_fplots <- lapply(umap_combined_ratio_variables, FPlot, data = combined_ratio_umap_full, scale = "con", size = 0.1, alpha = .5)
-plot1 <- patchwork::wrap_plots(combined_ratio_umap_fplots, ncol = 4)
-ggsave(file.path("analysis", "relative", "feature", "fplot_var_combined_ratio_umap_features.png"), plot = plot1, width = 25, height = 80, units = "cm", dpi = 300)
+## combined_ratio_umap_fplots <- lapply(umap_combined_ratio_variables, FPlot, data = combined_ratio_umap_full, scale = "con", size = 0.1, alpha = .5)
+## plot1 <- patchwork::wrap_plots(combined_ratio_umap_fplots, ncol = 4)
+## ggsave(file.path("analysis", "relative", "feature", "fplot_var_combined_ratio_umap_features.png"), plot = plot1, width = 25, height = 80, units = "cm", dpi = 300)
 
-#age
-FPlot(feature = "age", data = combined_ratio_umap_full, scale = "con", size = 0.3, alpha =.5)
-ggsave(file.path("analysis", "relative", "feature", "fplot_var_combined_ratio_umap_age.png"), width = 2.5, height = 5)
+## #age
+## FPlot(feature = "age", data = combined_ratio_umap_full, scale = "con", size = 0.3, alpha =.5)
+## ggsave(file.path("analysis", "relative", "feature", "fplot_var_combined_ratio_umap_age.png"), width = 2.5, height = 5)
 
-#  section abundance umap combined_ratio ------------------------------------------
-lapply(categories, dotPlot_cluster, data = combined_ratio_umap_full)
+## #  section abundance umap combined_ratio ------------------------------------------
+## lapply(categories, dotPlot_cluster, data = combined_ratio_umap_full)
 
-#  section topmarkers for clusters combined_ratio ------------------------------------------
-#quickmarkers
-combined_ratio_matrix <-
-  combined_ratio_umap_full |>
-  select(c(granulos_CSF:albumin_ratio, granulos_ratio_norm:IgM_ratio_norm)) |>
-  as.matrix() |>
-  t()
+## #  section topmarkers for clusters combined_ratio ------------------------------------------
+## #quickmarkers
+## combined_ratio_matrix <-
+##   combined_ratio_umap_full |>
+##   select(c(granulos_CSF:albumin_ratio, granulos_ratio_norm:IgM_ratio_norm)) |>
+##   as.matrix() |>
+##   t()
 
-quickmarkers_res_combined_ratio <-
-  SoupX::quickMarkers(
-    combined_ratio_matrix,
-    combined_ratio_umap_full$cluster,
-    FDR = 0.01,
-    N = 100,
-    expressCut = 0.9
-  ) |>
-    tibble()
+## quickmarkers_res_combined_ratio <-
+##   SoupX::quickMarkers(
+##     combined_ratio_matrix,
+##     combined_ratio_umap_full$cluster,
+##     FDR = 0.01,
+##     N = 100,
+##     expressCut = 0.9
+##   ) |>
+##     tibble()
 
-# order of variables using hclust
-quickmarkers_order_combined_ratio <-
-    quickmarkers_res_combined_ratio |>
-    dplyr::select(gene, cluster, tfidf) |>
-    dplyr::mutate(cluster = paste0("cl", cluster)) |>
-    pivot_wider(names_from = "cluster", values_from = "tfidf") |>
-    ## dplyr::mutate(combined_ratio = coalesce(cl1, cl2, cl3, cl4, cl5, cl6, cl7, cl8), .before = 1)
-    dplyr::mutate(combined_ratio = do.call(coalesce, across(where(is.numeric))), .before = 1) |>
-    column_to_rownames("gene") |>
-    dist(method = "euclidean") |>
-    hclust("ward.D2")
+## # order of variables using hclust
+## quickmarkers_order_combined_ratio <-
+##     quickmarkers_res_combined_ratio |>
+##     dplyr::select(gene, cluster, tfidf) |>
+##     dplyr::mutate(cluster = paste0("cl", cluster)) |>
+##     pivot_wider(names_from = "cluster", values_from = "tfidf") |>
+##     ## dplyr::mutate(combined_ratio = coalesce(cl1, cl2, cl3, cl4, cl5, cl6, cl7, cl8), .before = 1)
+##     dplyr::mutate(combined_ratio = do.call(coalesce, across(where(is.numeric))), .before = 1) |>
+##     column_to_rownames("gene") |>
+##     dist(method = "euclidean") |>
+##     hclust("ward.D2")
 
-#dotplot quickmarkers
-quickmarkers_res_combined_ratio |>
-    dplyr::select(gene, cluster, tfidf, qval) |>
-    dplyr::rename(variable = gene) |>
-    dplyr::mutate(cluster = factor(cluster, levels = as.character(1:length(cluster))))|>
-    dplyr::mutate(variable = factor(variable, levels = quickmarkers_order_combined_ratio$labels[quickmarkers_order_combined_ratio$order])) |>
-    dplyr::mutate(qval = if_else(qval < 1e-320, 1e-320, qval)) |>
-    dplyr::mutate(qval = -log10(qval)) |>
-    dplyr::filter(tfidf > 0.5) |>
-    dplyr::mutate(qval > -log10(0.05)) |>
-    ggplot(aes(x = cluster, y = variable, size = tfidf, color = qval)) +
-    geom_point() +
-#    scale_size_area() +
-    viridis::scale_color_viridis() +
-    theme_classic() +
-    theme(panel.border = element_rect(color = "black", size = 1, fill = NA))
+## #dotplot quickmarkers
+## quickmarkers_res_combined_ratio |>
+##     dplyr::select(gene, cluster, tfidf, qval) |>
+##     dplyr::rename(variable = gene) |>
+##     dplyr::mutate(cluster = factor(cluster, levels = as.character(1:length(cluster))))|>
+##     dplyr::mutate(variable = factor(variable, levels = quickmarkers_order_combined_ratio$labels[quickmarkers_order_combined_ratio$order])) |>
+##     dplyr::mutate(qval = if_else(qval < 1e-320, 1e-320, qval)) |>
+##     dplyr::mutate(qval = -log10(qval)) |>
+##     dplyr::filter(tfidf > 0.5) |>
+##     dplyr::mutate(qval > -log10(0.05)) |>
+##     ggplot(aes(x = cluster, y = variable, size = tfidf, color = qval)) +
+##     geom_point() +
+## #    scale_size_area() +
+##     viridis::scale_color_viridis() +
+##     theme_classic() +
+##     theme(panel.border = element_rect(color = "black", size = 1, fill = NA))
 
-ggsave(file.path("analysis", "relative", "top", "top_dotplot_umap_combined_ratio_quickmarkers.pdf"), width = 4, height = 9)
+## ggsave(file.path("analysis", "relative", "top", "top_dotplot_umap_combined_ratio_quickmarkers.pdf"), width = 4, height = 9)
 
 
-# save umap combined_ratio ------------------------------------------
-qs::qsave(combined_ratio_umap_full, "final_one_rel_umap_combined_ratio.qs")
+## # save umap combined_ratio ------------------------------------------
+## qs::qsave(combined_ratio_umap_full, "final_one_rel_umap_combined_ratio.qs")
 
 
 ## #compare with andi
@@ -1510,6 +1599,8 @@ grDevices::cairo_pdf(
 )
 print(freq_dx_icd_biobank_phmap)
 dev.off()
+
+
 
 
 # CSF/blood ratios ------------------------------------------

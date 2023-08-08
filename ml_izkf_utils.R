@@ -417,7 +417,7 @@ abundanceCategoryPlot <- function(data, cluster) {
     viridis::scale_fill_viridis() +
     theme_classic() +
     theme(panel.border = element_rect(color = "black", size = 1, fill = NA)) +
-    labs(x = bquote(~-Log[10]~ "qval"), y = "", fill = "TF-IDF", title = paste0("cluster ", cluster))
+    labs(x = bquote(~-Log[10]~ "qval"), y = "", fill = "TF-IDF", title = cluster)
   ggsave(file.path("analysis", project, "abundance", paste0("barplot_soupx_", deparse(substitute(data)), "_cluster_", cluster, ".pdf")),
          width = 6,
          height = height,
@@ -448,5 +448,6 @@ topBarPlot <- function(data, cluster, tfidf_cutoff, qval_cutoff) {
     labs(x = bquote(~-Log[10]~ "qval"), y = "", fill = "TF-IDF", title = paste0("cluster ", cluster))
   ggsave(file.path("analysis", project, "top", paste0("barplot_soupx_", deparse(substitute(data)), "_cluster_", cluster, ".pdf")),
          width = 6,
-         height = height)
+         height = height,
+         device = cairo_pdf)
 }
