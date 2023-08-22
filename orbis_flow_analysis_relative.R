@@ -14,6 +14,12 @@ library(SoupX)
 library(ICD10gm)
 library(datawizard)
 
+library(tidymodels)
+library(finetune)
+options(tidymodels.dark = TRUE)
+##
+## library(themis) # for up/downsampling
+
 source("ml_izkf_utils.R")
 project <- "relative"
 
@@ -37,6 +43,8 @@ blood_data_complete <- all_data_one_complete$blood
 all_data_norm_complete <- qs::qread("final_one_rel_norm_complete.qs")
 csf_norm_complete <- all_data_norm_complete$csf
 blood_norm_complete <- all_data_norm_complete$blood
+
+combined_complete <- qread("final_one_rel_combined_complete.qs")
 
 combined_norm_complete <- qs::qread("final_one_rel_combined_norm_complete.qs")
 combined_umap_full <- qs::qread("final_one_rel_umap_combined.qs")
@@ -216,8 +224,6 @@ pdf(file.path("analysis", "relative", "correlation", "corplot_spearman.pdf"), wi
 corrplot(cor_data, order = "hclust", method = "color", col = phmap_colors, tl.col = "black", cl.cex = 0.8, tl.cex = 0.5, hclust.method = "ward.D")
 dev.off()
 
-head(cor_data)
-
 ##correlation with age difficult because correlates strongly with diseases
 
 
@@ -231,8 +237,19 @@ combined_data <-
   select(-sample_pair_id) |>
   rename_with(function(x) str_remove(x, "_CSF"), c(protein_CSF_CSF:IgM_ratio_CSF, glucose_CSF_CSF))
 
+#normalize combined data
+combined_data_norm <-
+  combined_data |>
+  recipes::recipe(dx_icd_level2 ~ .) |>
+  bestNormalize::step_orderNorm(recipes::all_numeric()) |>
+  recipes::prep() |>
+  recipes::bake(new_data = NULL)
+
+
+
 combined_data_ctrl <-
   combined_data |>
+  ## combined_data_norm |>
   dplyr::filter(dx_icd_level2 == "somatoform")
 
 combined_data_ctrl |>
@@ -247,27 +264,27 @@ csf_data |>
   arrange(age) |>
   select(age, hd, dx_icd_level2)
 
-# remove basic cell counts because they have low variability (many zeros) and OCB  because it is discrete
 vars_cor <-
   combined_data |>
   select(granulos_CSF:lactate_CSF) |>
-  select(-OCB_CSF) |>
-  select(-lymphos_basic_CSF, -granulos_basic_CSF, -erys_basic_CSF, -other_cells_basic_CSF, -cell_count_CSF) |>
+  ## select(-OCB_CSF) |>
+  ## select(-lymphos_basic_CSF, -granulos_basic_CSF, -erys_basic_CSF, -other_cells_basic_CSF, -cell_count_CSF) |>
   names()
 
-## #regress out age
-## combined_regress_age_dx_icd_level2 <-
-##   combined_data |>
-##   drop_na(dx_icd_level2) |>
-##   datawizard::adjust(effect = c("dx_icd_level2", "age"), select = vars_cor, keep_intercept = TRUE) |>
-##   tibble()
-
-combined_ctrl_regress_sex_dx_icd_level2 <-
+#regress out age
+combined_ctrl_regress_age_dx_icd_level2 <-
   combined_data_ctrl |>
   drop_na(dx_icd_level2) |>
-  datawizard::adjust(effect = c("sex"), select = vars_cor, keep_intercept = TRUE) |>
+  datawizard::adjust(effect = c("age"), select = vars_cor, keep_intercept = TRUE) |>
   tibble()
 
+combined_ctrl_regress_age_dx_icd_level2 |>
+  count(sex)
+
+str(combined_norm_complete)
+combined_data
+
+names(combined_complete)
 ## # regress out sex
 ## combined_regress_sex_dx_icd_level2<-
 ##   combined_data |>
@@ -309,56 +326,62 @@ cor_age_regress_ctrl <-
   lapply(vars_cor, FUN = function(x) cor_fun(data = combined_ctrl_regress_sex_dx_icd_level2, var = x)) |>
   set_names(vars_cor) |>
   bind_rows(.id = "var")|>
-  mutate(p_adjust = p.adjust(p.value, method = "BH", n = length(vars_cor)), 2) |>
-  arrange(desc(abs(estimate)))
+  mutate(p_adjust = p.adjust(p.value, method = "BH", n = length(vars_cor))) |>
+  arrange(desc(estimate))
+
+writexl::write_xlsx(cor_age_regress_ctrl, file.path("analysis", "relative", "correlation", "correlation_age_regress_ctrl.xlsx"))
 
 # volcano plot of correlation with age
 ## cor_age_regress |>
 cor_age_regress_ctrl |>
   mutate(neg_log10_qval = -log10(p_adjust)) |>
-  ggplot(aes(x = estimate, y = neg_log10_qval, label = var)) +
+  mutate(sig = ifelse(neg_log10_qval > -log10(0.001) & abs(estimate) > 0.3, "yes", "no")) |>
+  mutate(var = ifelse(sig == "yes", var, "")) |>
+  ggplot(aes(x = estimate, y = neg_log10_qval, label = var, color = sig)) +
   geom_point() +
   ggrepel::geom_text_repel() +
   geom_hline(yintercept = -log10(0.001), color = "blue", linetype = "dashed")+ #horizontal line p unadjusted
-  geom_vline(xintercept = 0, color = "red", linetype = "dashed")+ #vertical line
+  geom_vline(xintercept = -0.3, color = "red", linetype = "dashed")+ #vertical line
+  geom_vline(xintercept = 0.3, color = "red", linetype = "dashed")+ #vertical line
   xlab("correlation coefficient")+
   ylab(bquote(-Log[10]~ "adjusted p value")) +
-  theme(legend.position = "none") +
-  theme_bw()
+  guides(color = FALSE) +
+  theme_bw() +
+  ## scale_color_manual(values = c("yes" = hue_pal()(1), "no" = "black"))
+  scale_color_manual(values = c("yes" = brewer.pal(3, "Set1")[1], "no" = "black"))
 
-ggsave(file.path("analysis", "relative", "correlation", "correlation_age_regress_ctrl.pdf"), width = 12, height = 13)
+ggsave(file.path("analysis", "relative", "correlation", "correlation_age_regress_ctrl.pdf"), width = 5, height = 5)
 
-
-## #unregressed data
-## cor_age <-
-##   lapply(vars_cor, FUN = function(x) cor_fun(data = combined_data, var = x)) |>
-##   set_names(vars_cor) |>
-##   bind_rows(.id = "var")|>
-##   mutate(p_adjust = p.adjust(p.value, method = "BH", n = length(vars_cor)), 2) |>
-##   arrange(desc(abs(estimate)))
-
-## cor_age |>
-##   mutate(neg_log10_qval = -log10(p_adjust)) |>
-##   ggplot(aes(x = estimate, y = neg_log10_qval, label = var)) +
-##   geom_point() +
-##   ggrepel::geom_text_repel() +
-##   geom_hline(yintercept = -log10(0.001), color = "blue", linetype = "dashed")+ #horizontal line p unadjusted
-##   geom_vline(xintercept = 0, color = "red", linetype = "dashed")+ #vertical line
-##   xlab("correlation coefficient")+
-##   ylab(bquote(-Log[10]~ "adjusted p value")) +
-##   theme(legend.position = "none") +
-##   theme_bw()
-
-## ggsave(file.path("analysis", "relative", "correlation", "correlation_age.pdf"), width = 12, height = 13)
-
+#individul correlatio plots of top variables
 combined_ctrl_regress_sex_dx_icd_level2 |>
   ggplot(aes(x = age, y = HLA_DR_CD4_CSF))+
   geom_point(size = 0.1, alpha = 0.5) +
   geom_smooth(method = "lm", se = TRUE) +
-  theme_bw()
+  theme_bw() +
+  ylab("percent of parent gate") +
+  ggtitle("HLA-DR CD4 CSF")
 
-ggsave(file.path("analysis", "relative", "correlation", "correlation_ctrl_age_regress_lineplot.pdf"), width = 5, height = 5)
+ggsave(file.path("analysis", "relative", "correlation", "correlation_ctrl_age_regress_hla_dr_cd4.pdf"), width = 3, height = 3)
 
+combined_ctrl_regress_sex_dx_icd_level2 |>
+  ggplot(aes(x = age, y = albumin_ratio))+
+  geom_point(size = 0.1, alpha = 0.5) +
+  geom_smooth(method = "lm", se = TRUE) +
+  theme_bw() +
+  ylab("percent of parent gate") +
+  ggtitle("albumin ratio")
+
+ggsave(file.path("analysis", "relative", "correlation", "correlation_ctrl_age_regress_albumin_ratio.pdf"), width = 3, height = 3)
+
+combined_ctrl_regress_sex_dx_icd_level2 |>
+  ggplot(aes(x = age, y = dn_T_blood))+
+  geom_point(size = 0.1, alpha = 0.5) +
+  geom_smooth(method = "lm", se = TRUE) +
+  theme_bw() +
+  ylab("percent of parent gate") +
+  ggtitle("double negative T cells blood")
+
+ggsave(file.path("analysis", "relative", "correlation", "correlation_ctrl_age_regress_dn_T_blood.pdf"), width = 3, height = 3)
 
 # sex ------------------------------------------
 debugonce(shapiro.test)
@@ -367,6 +390,9 @@ shapiro.test(combined_data$monos_CSF[1:5000])
 
 library(nortest)
 nortest::ad.test(combined_data$glucose_CSF)
+nortest::ad.test(combined_data_norm$glucose_CSF)
+nortest::ad.test(combined_data_norm$OCB_CSF)
+nortest::ad.test(combined_data_norm$cell_count_CSF)
 
 ggplot(combined_data, aes(sample = monos_CSF))+
   stat_qq() +
@@ -378,55 +404,109 @@ cor_fun <- function(data, var) {
 }
 
 
-# function fo t test and cohens d (which is independent of the scale compared to t test estimate)
-my_t_test <- function(data, var) {
+## # function for t test and cohens d (which is independent of the scale compared to t test estimate)
+## my_t_test <- function(data, var) {
+##   my_formula <-  paste0(var, "~ sex")
+##   t_res <-  t.test(as.formula(my_formula), data = data)
+##   cohen_res <- rstatix::cohens_d(as.formula(my_formula), data = data)
+##   tidy(t_res) |>
+##     mutate(cohens_d = cohen_res$effsize)
+## }
+
+## my_t_test(combined_ctrl_regress_age_dx_icd_level2, "albumin_ratio") |>
+##   select(p.value, cohens_d)
+
+
+## # point biserial association
+## cor.test(combined_ctrl_regress_age_dx_icd_level2$albumin_ratio,
+##          as.numeric(combined_ctrl_regress_age_dx_icd_level2$sex),
+##          method = "spearman") |>
+## tidy()
+
+
+library(WRS2)
+akp.effect(albumin_ratio ~ sex, data = combined_ctrl_regress_age_dx_icd_level2)
+
+
+# function for  wilcox test and algina keselman and penfield effect size (robust version of cohen's d)
+my_wilcox_test <- function(data, var) {
   my_formula <-  paste0(var, "~ sex")
-  t_res <-  t.test(as.formula(my_formula), data = data)
-  cohen_res <- rstatix::cohens_d(as.formula(my_formula), data = data)
-  tidy(t_res) |>
-    mutate(cohens_d = cohen_res$effsize)
+  akp_effect <- akp.effect(as.formula(my_formula), data = data)
+  res <-  tidy(wilcox.test(as.formula(my_formula), data = data)) |>
+    mutate(akp_effect = akp_effect$AKPeffect)
+  return(res)
 }
 
+my_wilcox_test(combined_ctrl_regress_age_dx_icd_level2, "albumin_ratio")
 
-## # regressed out dx_icd_level2
-## stat_sex_regress <-
-##   lapply(vars_cor, FUN = function(x) my_t_test(data = combined_regress_age_dx_icd_level2, var = x)) |>
-##   set_names(vars_cor) |>
-##   bind_rows(.id = "var")|>
-##   mutate(p_adjust = p.adjust(p.value, method = "BH", n = length(vars_cor)), 2) |>
-##   select(var, estimate, cohens_d, p.value, p_adjust)
+## my_wilcox_test(combined_ctrl_regress_age_dx_icd_level2, "albumin_ratio")
+## my_wilcox_test(combined_ctrl_regress_age_dx_icd_level2, "albumin_ratio")
 
 stat_sex_regress_ctrl <-
-  lapply(vars_cor, FUN = function(x) my_t_test(data = combined_ctrl_regress_age_dx_icd_level2, var = x)) |>
+  ## lapply(vars_cor, FUN = function(x) my_t_test(data = combined_ctrl_regress_age_dx_icd_level2, var = x)) |>
+  lapply(vars_cor, FUN = function(x) my_wilcox_test(data = combined_ctrl_regress_age_dx_icd_level2, var = x)) |>
   set_names(vars_cor) |>
   bind_rows(.id = "var")|>
-  mutate(p_adjust = p.adjust(p.value, method = "BH", n = length(vars_cor)), 2) |>
-  select(var, estimate, cohens_d, p.value, p_adjust)
+  mutate(p_adjust = p.adjust(p.value, method = "BH", n = length(vars_cor))) |>
+  arrange(desc(akp_effect)) |>
+  relocate(akp_effect, .after = var)
+  ## select(var, cohens_d, p.value, p_adjust)
+  ## select(var, effsize, p, p_adjust)
 
+writexl::write_xlsx(stat_sex_regress_ctrl, file.path("analysis", "relative", "correlation", "stat_sex_regress_ctrl.xlsx"))
 #volcano plot of sex differences with dx_icd_level regress
 
 ## stat_sex_regress |>
 stat_sex_regress_ctrl |>
   mutate(neg_log10_qval = -log10(p_adjust)) |>
-  ggplot(aes(x = cohens_d, y = neg_log10_qval, label = var)) +
+  mutate(sig = ifelse(neg_log10_qval > -log10(0.001) & abs(akp_effect) > 0.5, "yes", "no")) |>
+  mutate(var = ifelse(sig == "yes", var, "")) |>
+  ## ggplot(aes(x = cohens_d, y = neg_log10_qval, label = var)) +
+  ggplot(aes(x = akp_effect, y = neg_log10_qval, label = var, color = sig)) +
   geom_point() +
   ggrepel::geom_text_repel() +
   geom_hline(yintercept = -log10(0.001), color = "blue", linetype = "dashed")+ #horizontal line p unadjusted
-  geom_vline(xintercept = 0, color = "red", linetype = "dashed")+ #vertical line
-  xlab("correlation coefficient")+
+  geom_vline(xintercept = -0.5, color = "red", linetype = "dashed")+ #vertical line
+  geom_vline(xintercept = 0.5, color = "red", linetype = "dashed")+ #vertical line
+  xlab("effect size")+
   ylab(bquote(-Log[10]~ "adjusted p value")) +
   theme(legend.position = "none") +
-  theme_bw()
+  theme_bw() +
+  guides(color = FALSE) +
+  scale_color_manual(values = c("yes" = brewer.pal(3, "Set1")[1], "no" = "black"))
 
-ggsave(file.path("analysis", "relative", "correlation", "stat_sex_regress_ctrl.pdf"), width = 12, height = 13)
+ggsave(file.path("analysis", "relative", "correlation", "stat_sex_regress_ctrl.pdf"), width = 5, height = 5)
 
 combined_ctrl_regress_age_dx_icd_level2 |>
-  dplyr::filter(!is.na(sex)) |>
-  ggplot(aes(x = sex, y = albumin_CSF)) +
-  geom_boxplot()
+  ggplot(aes(x = sex, y = albumin_ratio)) +
+  ## geom_violin()+
+  geom_boxplot() +
+  theme_bw() +
+  ggtitle("albumin ratio") +
+  ylab("")
 
-ggsave(file.path("analysis", "relative", "correlation", "stat_sex_regress_bp.pdf"), width = 5, height = 5)
+ggsave(file.path("analysis", "relative", "correlation", "stat_sex_regress_bp_albumin_ratio.pdf"), width = 2, height = 3)
 
+combined_ctrl_regress_age_dx_icd_level2 |>
+  dplyr::filter(IgG_ratio < 400) |>
+  ggplot(aes(x = sex, y = IgG_ratio)) +
+  ## geom_violin()+
+  geom_boxplot() +
+  theme_bw() +
+  ggtitle("IgG ratio") +
+  ylab("")
+
+ggsave(file.path("analysis", "relative", "correlation", "stat_sex_regress_bp_igg_ratio.pdf"), width = 2, height = 3)
+
+combined_ctrl_regress_age_dx_icd_level2 |>
+  ggplot(aes(x = sex, y = T_blood)) +
+  ## geom_violin()+
+  geom_boxplot() +
+  theme_bw() +
+  ggtitle("T blood") +
+  ylab("percent of parent gate")
+
+ggsave(file.path("analysis", "relative", "correlation", "stat_sex_regress_bp_t_blood.pdf"), width = 2, height = 3)
 ## sex differences without regressionr
 ## stat_sex <-
 ##   lapply(vars_cor, FUN = function(x) my_t_test(data = combined_data, var = x)) |>
@@ -565,8 +645,8 @@ blood_data_mice <- select(blood_data, dx_icd_level1:dx_andi_level3, patient_id:H
 skimr::skim(blood_data_mice)
 mice::md.pattern(blood_data_mice)
 
-predictor_matrix_blood <- mice::quickpred(blood_data_mice,
-#                                        exclude = c("dx_icd_level2", "patient_id", "sample_pair_id", "tissue"),
+predictor_matrix_blood <- mice::quickpreblood_data_mice,
+#                                        exclude = c("dx_icd_level2", "patient_id", "sample_pair_id", "tissue",
                                         mincor = 0.1,
                                         method = "pearson")
 
@@ -656,6 +736,22 @@ qs::qsave(all_data_norm_complete, "final_one_rel_norm_complete.qs")
 #combined
 #keep only those samples with complete csf and blood
 skim(combined_norm_complete)
+
+combined_complete_imputed <-
+    bind_rows(csf_data_complete, blood_data_complete) |>
+    select(sample_pair_id, granulos:lactate, tissue) |>
+    pivot_wider(names_from = tissue, values_from = granulos:lactate) |>
+    select(where(function(x) !all(is.na(x)))) |>
+    drop_na() |>
+    rename_with(function(x) str_remove(x, "_CSF"), c(protein_CSF_CSF:IgM_ratio_CSF, glucose_CSF_CSF))
+
+combined_complete <-
+    combined_complete_imputed |>
+    left_join(
+        select(csf_data_complete, patient_id, sample_pair_id, dx_icd_level1:lp_interval),
+               by = "sample_pair_id")
+
+qs::qsave(combined_complete, "final_one_rel_combined_complete.qs")
 
 combined_norm_complete_imputed <-
     bind_rows(csf_data_complete, blood_data_complete) |>
@@ -1188,17 +1284,125 @@ str(combined_norm_complete$geschlecht)
 ##   tibble()
 
 #  section UMAP COMBINED  ------------------------------------------
+## umap_data <-
+##   combined_complete |>
+##   dplyr::select(granulos_CSF:lactate_CSF) |>
+##   dplyr::select(-OCB_CSF) |>
+##   mutate(across(where(is.numeric), log1p)) |>
+##   mutate(across(cell_count_CSF:lactate_CSF, function(x) scale(x, center = TRUE, scale = TRUE)))
+
+##  |>
+##   scale(center = TRUE, scale = TRUE)
+## names(combined_complete)
+
+
+## install.packages("fitdistrplus")
+
+## plots <-
+##   combined_complete |>
+##   select(granulos_CSF:lactate_CSF) |>
+##   map(function(x) fitdistrplus::descdist(x, discrete = TRUE))
+
+
+## patchwork::wrap_plots(plots)
+## fitdistrplus::descdist(combined_complete$granulos_CSF) # lognormal or gamma
+## fitdistrplus::descdist(combined_complete$plasma_CSF) # lognormal or gamma
+## fitdistrplus::descdist(combined_complete$lactate_CSF) # lognormal or gamma
+## fitdistrplus::descdist(combined_complete$protein_CSF) # lognormal or gamma
+## fitdistrplus::descdist(combined_complete$cell_count_CSF, discrete = TRUE) # possion or negative binomial
+## fitdistrplus::descdist(combined_complete$cell_count_CSF)
+
+## library(fitdistrplus)
+
+## #exp, gamma and beta are all good
+## plot(fitdistrplus::fitdist(combined_complete$granulos_CSF, "norm"))
+## plot(fitdistrplus::fitdist(combined_complete$granulos_CSF, "exp"))
+## plot(fitdistrplus::fitdist(combined_complete$granulos_CSF, "gamma", method = "mme"))
+## plot(fitdistrplus::fitdist(combined_complete$granulos_CSF/100, "beta", method = "mme"))
+## plot(fitdistrplus::fitdist(combined_complete$granulos_CSF, "pois", method = "mme"))
+## plot(fitdistrplus::fitdist(combined_complete$granulos_CSF, "nbinom", method = "mme"))
+
+
+## #beta and gamma are okay
+## plot(fitdistrplus::fitdist(combined_complete$plasma_CSF, "norm"))
+## plot(fitdistrplus::fitdist(combined_complete$plasma_CSF, "exp"))
+## plot(fitdistrplus::fitdist((combined_complete$plasma_CSF/100), "beta", method = "mme"))
+## plot(fitdistrplus::fitdist(combined_complete$plasma_CSF, "gamma", method = "mme"))
+## plot(fitdistrplus::fitdist(combined_complete$plasma_CSF, "pois", method = "mme"))
+## plot(fitdistrplus::fitdist(combined_complete$plasma_CSF, "nbinom", method = "mme"))
+
+## #gamma are okay
+## plot(fitdistrplus::fitdist(combined_complete$protein_CSF, "norm"))
+## plot(fitdistrplus::fitdist((combined_complete$protein_CSF/100), "beta", method = "mme"))
+## plot(fitdistrplus::fitdist(combined_complete$protein_CSF, "gamma", method = "mme"))
+
+## #nbinom best
+## plot(fitdistrplus::fitdist(combined_complete$cell_count_CSF, "norm"))
+## plot(fitdistrplus::fitdist(combined_complete$cell_count_CSF, "pois"))
+## plot(fitdistrplus::fitdist(combined_complete$cell_count_CSF, "nbinom", method = "mle"))
+
+## fitdistrplus::fitdist(combined_complete$cell_count_CSF, "nbinom")
+
+## library(datathin)
+## library(countsplit)
+
+## shape1 <- fitdistrplus::fitdist(combined_complete$granulos_CSF, "gamma", method = "mme")$estimate[["shape"]]
+## shape1 <- fitdistrplus::fitdist((combined_complete$granulos_CSF/100), "beta", method = "mme")$estimate[["shape1"]]
+## size1 <- fitdistrplus::fitdist(combined_complete$granulos_CSF, "nbinom", method = "mme")$estimate[["size"]]
+
+## fitdistrplus::fitdist(combined_complete$cell_count_CSF, "nbinom", method = "mle")$estimate$size
+
+
+## test3 <-
+##   combined_complete |>
+##   dplyr::select(granulos_CSF) |>
+##   mutate(granulos_CSF = granulos_CSF + 1) |>
+##   ## datathin(family = "gamma", K = 2, arg = shape1)
+## ## datathin(family = "negative binomial", K = 1, arg = shape1)
+## ## datathin(family = "poisson", K = 10)
+
+
+## test3 <-
+##   combined_complete |>
+##   dplyr::select(cell_count_CSF) |>
+##   datathin(family = "negative binomial", K = 2, arg = size1)
+
+## as_tibble(test3[,,1])
+
 set.seed(123)
 combined_umap <-
   combined_norm_complete |>
-  ## combined_norm_regress |>
   select(granulos_CSF:lactate_CSF) |>
   select(-OCB_CSF) |>
   uwot::umap(scale = FALSE, pca = NULL, metric = "cosine", n_neighbors = 30, min_dist = 0.01) |>
+  ## uwot::umap(scale = FALSE, pca = NULL, metric = "cosine", n_neighbors = 50, min_dist = 0.1) |>
   #    uwot::umap(scale = FALSE, pca = NULL, metric = "euclidean", n_neighbors = 30, min_dist = 0.01) |>
   as_tibble() |>
   rename(UMAP1 = V1, UMAP2 = V2)
 
+## set.seed(123)
+## combined_umap <-
+##   umap_data |>
+##   ## uwot::umap(scale = FALSE, pca = NULL, metric = "cosine", n_neighbors = 30, min_dist = 0.01) |>
+##   ## uwot::umap(scale = FALSE, pca = NULL, metric = "euclidean", n_neighbors = 200, min_dist = 0.1) |>
+##   uwot::umap(scale = FALSE, pca = NULL, metric = "cosine", n_neighbors = 100, min_dist = 0.1) |>
+##   ## uwot::umap(scale = FALSE, pca = NULL, metric = "cosine", n_neighbors = 50, min_dist = 0.2) |>
+##   ## uwot::umap() |>
+##   as_tibble() |>
+##   rename(UMAP1 = V1, UMAP2 = V2)
+
+#supervised umap
+## set.seed(123)
+## combined_umap <-
+##   combined_norm_complete |>
+##   select(dx_icd_level2, granulos_CSF:lactate_CSF) |>
+##   select(-OCB_CSF) |>
+##   recipes::recipe(dx_icd_level2 ~ .) |>
+##   embed::step_umap(all_predictors(), outcome = "dx_icd_level2") |>
+##   recipes::prep() |>
+##   recipes::bake(new_data = NULL)
+
+## names(combined_norm_complete)
 ## #kmeans clustering
 ## set.seed(123)
 ## cl_combined_kmeans <- combined_norm_complete |>
@@ -1257,12 +1461,30 @@ combined_umap <-
 #ari only works if you know the ground truth
 ## mclust::adjustedRandIndex(cl_csf_gap$Best.partition, cl_combined_kmeans$cluster)
 
-
 set.seed(123)
 cl_combined_phenograph <-
-    combined_norm_complete |>
-    select(granulos_CSF:lactate_CSF) |>
-    Rphenoannoy::Rphenoannoy(k = 60, trees = 300)
+  combined_norm_complete |>
+  select(granulos_CSF:lactate_CSF) |>
+  select(-OCB_CSF) |>
+  Rphenoannoy::Rphenoannoy(k = 60, trees = 300)
+
+## set.seed(123)
+## cl_combined_phenograph <-
+##   umap_data |>
+##   ## Rphenoannoy::Rphenoannoy(trees = 300, k = 100)
+##   ## Rphenoannoy::Rphenoannoy(trees = 300, k = 50)
+##   ## Rphenoannoy::Rphenoannoy(trees = 300, k = 30)
+##   Rphenoannoy::Rphenoannoy(trees = 1000, k = 30)
+##   ## Rphenoannoy::Rphenoannoy(trees = 1000, k = 20)
+
+## #kmeans clustering
+## set.seed(123)
+## cl_combined_kmeans <-
+##   umap_data |>
+##   stats::kmeans(centers = 12, iter.max = 30, algorithm = "Hartigan-Wong")
+##   ## stats::kmeans(centers = 10, iter.max = 30, algorithm = "MacQueen")
+
+
 
 #cl3 inflammatory
 #cl1 healthy_CSF
@@ -1289,6 +1511,7 @@ combined_phenograph <-
 #combine umap, cluster and metadata
 ## combined_umap_full <- bind_cols(combined_umap, combined_norm_complete, cluster = factor(cl_combined_kmeans$cluster))
 combined_umap_full <- bind_cols(combined_umap, combined_norm_complete, cluster = combined_phenograph$cluster_name)
+## combined_umap_full <- bind_cols(combined_umap, combined_norm_complete, cluster = as.character(cl_combined_phenograph$community$membership))
 
 #  section feature plots umap combined ------------------------------------------
 #plot cluster
@@ -1297,7 +1520,7 @@ ggsave(file.path("analysis", "relative", "umap", "combined_umap_cluster_phenogra
 ## ggsave(file.path("analysis", "relative", "umap", "combined_umap_cluster_phenograph.pdf"), width = 6, height = 5)
 
 #categories feature plots
-categories <- c("dx_icd_level1", "dx_icd_level2", "dx_biobanklist_level1", "dx_biobanklist_level2", "dx_andi_level1", "dx_andi_level2", "dx_andi_level3")
+## categories <- c("dx_icd_level1", "dx_icd_level2", "dx_biobanklist_level1", "dx_biobanklist_level2", "dx_andi_level1", "dx_andi_level2", "dx_andi_level3")
 categories <- c("dx_icd_level2")
 lapply(categories, FPlot_dx, data = combined_umap_full)
 
@@ -1308,10 +1531,10 @@ ggsave(file.path("analysis", "relative", "feature", "fplot_var_combined_umap_ocb
 
 #plot umap variables
 umap_combined_variables <-
-    combined_umap_full |>
-    select(granulos_CSF:lactate_CSF) |>
-    select(-OCB_CSF) |>
-    names()
+  combined_umap_full |>
+  dplyr::select(granulos_CSF:lactate_CSF) |>
+  dplyr::select(-OCB_CSF) |>
+  names()
 
 combined_umap_fplots <- lapply(umap_combined_variables, FPlot, data = combined_umap_full, scale = "con", size = 0.1, alpha = .5)
 plot1 <- patchwork::wrap_plots(combined_umap_fplots, ncol = 4)
@@ -1343,6 +1566,7 @@ abundance_combined_soupx <-
   tibble()
 
 lapply(lookup_cluster$cluster_name, abundanceCategoryPlot, data = abundance_combined_soupx)
+lapply(as.character(0:7), abundanceCategoryPlot, data = abundance_combined_soupx)
 
 rownames(combined_dx_icd_level2_matrix)
 
@@ -1823,8 +2047,6 @@ sum(r_present$R_present, na.rm = TRUE)/nrow(r_present)
 # up/downsampling does not improve performance
 # different normalization (bestNormalize) does not improve the performance
 
-library(tidymodels)
-## library(themis) # for up/downsampling
 
 # prepare data for tidymodels ------------------------------------------
 top4_icd <-
@@ -1842,13 +2064,14 @@ data_csf_flow_tidymodels <-
   dplyr::select(dx_icd_level2, granulos:HLA_DR_T)
   ## dplyr::select(dx_icd_level2, granulos:lactate)
 
+
 data_blood_flow_tidymodels <-
   blood_data_complete |>
   dplyr::filter(dx_icd_level2 %in% top4_icd) |>
   dplyr::mutate(dx_icd_level2 = factor(dx_icd_level2)) |>
   dplyr::select(dx_icd_level2, granulos:HLA_DR_T)
 
-#basic, so  lymphocytes, cell count, protein, IgG ratios, OCB
+
 data_csf_basic_tidymodels <-
   csf_data_complete |>
   dplyr::filter(dx_icd_level2 %in% top4_icd) |>
@@ -1866,13 +2089,53 @@ data_combined_tidymodels <-
   dplyr::mutate(dx_icd_level2 = factor(dx_icd_level2)) |>
   dplyr::select(dx_icd_level2, granulos_CSF:lactate_CSF)
 
+#same data
+data_csf_flow_tidymodels <-
+  combined_complete |>
+  dplyr::filter(dx_icd_level2 %in% top4_icd) |>
+  dplyr::mutate(dx_icd_level2 = factor(dx_icd_level2)) |>
+  dplyr::select(dx_icd_level2, contains("CSF")) |>
+  dplyr::select(dx_icd_level2:HLA_DR_T_CSF)
+
+data_blood_flow_tidymodels <-
+  combined_complete |>
+  dplyr::filter(dx_icd_level2 %in% top4_icd) |>
+  dplyr::mutate(dx_icd_level2 = factor(dx_icd_level2)) |>
+  dplyr::select(dx_icd_level2, contains("blood"))
+
+data_csf_basic_tidymodels <-
+  combined_complete |>
+  dplyr::filter(dx_icd_level2 %in% top4_icd) |>
+  dplyr::mutate(dx_icd_level2 = factor(dx_icd_level2)) |>
+  dplyr::select(dx_icd_level2, contains("CSF")) |>
+  dplyr::select(dx_icd_level2, lymphos_basic_CSF:lactate_CSF)
+
+data_combined_tidymodels <-
+  combined_complete |>
+  dplyr::filter(dx_icd_level2 %in% top4_icd) |>
+  dplyr::mutate(dx_icd_level2 = factor(dx_icd_level2)) |>
+  dplyr::select(dx_icd_level2, granulos_CSF:lactate_CSF)
+
 # split data ------------------------------------------
 #split, strata will keep the balance between both classes in train and test roughly the same
 set.seed(1234)
-splits <- initial_split(data_csf_flow_tidymodels, prop = 3/4, strata = dx_icd_level2)
-splits <- initial_split(data_blood_flow_tidymodels, prop = 3/4, strata = dx_icd_level2)
-splits <- initial_split(data_csf_basic_tidymodels, prop = 3/4, strata = dx_icd_level2)
-splits <- initial_split(data_combined_tidymodels, prop = 3/4, strata = dx_icd_level2)
+splits1 <- initial_split(data_csf_flow_tidymodels, prop = 3/4, strata = dx_icd_level2)
+
+set.seed(1234)
+splits2 <- initial_split(data_blood_flow_tidymodels, prop = 3/4, strata = dx_icd_level2)
+
+set.seed(1234)
+splits3 <- initial_split(data_csf_basic_tidymodels, prop = 3/4, strata = dx_icd_level2)
+
+set.seed(1234)
+splits4 <- initial_split(data_combined_tidymodels, prop = 3/4, strata = dx_icd_level2)
+
+#make sure to have the same splits
+identical(splits1$in_id, splits2$in_id)
+identical(splits1$in_id, splits3$in_id)
+identical(splits3$in_id, splits4$in_id)
+
+splits <- splits4
 
 train_data <- training(splits)
 test_data <- testing(splits)
@@ -1887,13 +2150,12 @@ test_data |>
     mutate(prop = n/sum(n))
 
 #build the model
-lr_model <-
-  multinom_reg(penalty = tune(), mixture = tune()) |>
-  set_engine("glmnet") |>
-  translate()
+## lr_model <-
+##   multinom_reg(penalty = tune(), mixture = tune()) |>
+##   set_engine("glmnet") |>
+##   translate()
 
 rf_model <-
-  ## rand_forest(trees = 3000) |>
   rand_forest(mtry = tune(), min_n = tune(), trees = 3000) |>
   set_mode("classification") |>
   set_engine("ranger")
@@ -1935,17 +2197,19 @@ library(doMC)
 registerDoMC(cores = 6)
 
 #workflows
-set.seed(1234)
-lr_workflow <-
-    workflow() |>
-    add_model(lr_model) |>
-    add_recipe(data_recipe)
+## set.seed(1234)
+## lr_workflow <-
+##     workflow() |>
+##     add_model(lr_model) |>
+##     add_recipe(data_recipe)
 
 set.seed(1234)
 rf_workflow <-
   workflow() |>
   add_model(rf_model) |>
   add_recipe(data_recipe)
+
+rf_workflow$pre$actions$recipe$recipe$var_info$variable
 
 ## set.seed(1234)
 ## xgb_workflow <-
@@ -1954,8 +2218,13 @@ rf_workflow <-
 ##   add_recipe(data_recipe)
 
 #grid for tuning
-lr_reg_grid <- grid_regular(penalty(range(-4,0)), mixture(), levels = c(10,5))
-## rf_grid <- grid_regular(mtry(range = c(10,30)), min_n(range = c(3,30)), levels = c(5,2))
+## lr_reg_grid <- grid_regular(penalty(range(-4,0)), mixture(), levels = c(10,5))
+
+## rf_grid <- grid_regular(mtry(range = c(5, ncol(train_data) -1)), min_n(range = c(2,40)), levels = c(5,5))
+
+#best
+## mtry i 5-10
+## min_n 15 -30
 
 ## xgb_grid <- grid_latin_hypercube(
 ##   tree_depth(),
@@ -1968,17 +2237,17 @@ lr_reg_grid <- grid_regular(penalty(range(-4,0)), mixture(), levels = c(10,5))
 ## )
 
 #train and tune lr
-system.time(
-  res_model <-
-    lr_workflow |>
-    tune_grid(
-      resamples = folds,
-      grid = lr_reg_grid,
-      control = control_grid(save_pred = TRUE),
-      metrics = metric_set(accuracy, bal_accuracy, f_meas, roc_auc))
-)
-
+## system.time(
+##   res_model <-
+##     lr_workflow |>
+##     tune_grid(
+##       resamples = folds,
+##       grid = lr_reg_grid,
+##       control = control_grid(save_pred = TRUE),
+##       metrics = metric_set(accuracy, bal_accuracy, f_meas, roc_auc))
+## )
 #train and tune rf
+set.seed(1234)
 system.time(
   res_model <-
     rf_workflow |>
@@ -1988,26 +2257,97 @@ system.time(
       control = control_grid(save_pred = TRUE),
       metrics = metric_set(accuracy, bal_accuracy, f_meas, roc_auc))
 )
-#6 min witzh 6 cores and without repeats with 3000 trees
 
+#6 min witzh 6 cores and without repeats with 3000 trees
 #train and tune rf
-system.time(
-  res_model <-
-    xgb_workflow |>
-    tune_grid(
-      resamples = folds,
-      grid = xgb_grid,
-      control = control_grid(save_pred = TRUE),
-      metrics = metric_set(accuracy, bal_accuracy, f_meas, roc_auc))
-)
-#18min with 6 cores and without repeats
+## system.time(
+##   res_model <-
+##     rf_workflow |>
+##     tune_race_anova(
+##       resamples = folds,
+##       grid = 10,
+##       control = control_race(verbose_elim = TRUE),
+##       metrics = metric_set(accuracy, bal_accuracy, f_meas, roc_auc))
+## )
+## #7 min with 6 cores and control_race
+
+## # mtry needs to be set before tune_sim_anneal or tune_bayes can run
+## rf_workflow_parameter <-
+##   rf_workflow |>
+##   extract_parameter_set_dials() |>
+##   update(mtry = mtry(c(1, 20)))
+
+## #train and tune rf with sim anneal
+## system.time(
+##   res_model <-
+##     rf_workflow |>
+##     tune_sim_anneal(
+##       resamples = folds,
+##       iter = 20,
+##       initial = 4,
+##       param_info = rf_workflow_parameter,
+##       control = control_sim_anneal(verbose = TRUE),
+##       metrics = metric_set(bal_accuracy, roc_auc))
+## )
+#6 min witzh 6 cores and without repeats with 3000 trees
+#18 min with 6 cores and tune_sim_anneal (but more combinations)
+
+
+## #bayesian tuning
+## set.seed(1234)
+## start_grid <-
+##   rf_workflow_parameter |>
+##   update(mtry = mtry(c(5,10))) |>
+##   grid_regular(levels = 2)
+
+## set.seed(1234)
+## rf_initial <-
+##   rf_workflow |>
+##   tune_grid(resamples = folds, grid = start_grid, metrics = metric_set(bal_accuracy, roc_auc))
+
+## #train and tune rf
+## system.time(
+##   res_model <-
+##     rf_workflow |>
+##     tune_bayes(
+##       resamples = folds,
+##       iter = 20,
+##       initial = rf_initial,
+##       param_info = rf_workflow_parameter,
+##       control = control_bayes(verbose = TRUE),
+##       metrics = metric_set(roc_auc, bal_accuracy))
+## )
+## #7 min with 6 cores and tune bayes
+
+
+#train and tune xgb
+## system.time(
+##   res_model <-
+##     xgb_workflow |>
+##     tune_grid(
+##       resamples = folds,
+##       grid = xgb_grid,
+##       control = control_grid(save_pred = TRUE),
+##       metrics = metric_set(accuracy, bal_accuracy, f_meas, roc_auc))
+## )
+## #18min with 6 cores and without repeats
 
 stopCluster(cl)
 
 autoplot(res_model, metric = "roc_auc")
 autoplot(res_model, metric = "bal_accuracy")
 
-collect_metrics(res_model)
+collect_metrics(rf_initial) |>
+  dplyr::filter(.metric == "roc_auc") |>
+  arrange(desc(mean))
+
+collect_metrics(res_model) |>
+  dplyr::filter(.metric == "roc_auc") |>
+  mutate(min_n = factor(min_n)) |>
+  ggplot(aes(mtry, mean, color = min_n)) +
+  geom_line(aes(group = min_n)) +
+  geom_point()
+
 
 ## #lr_res_main <- lr_res
 ## res_model |>
@@ -2033,21 +2373,19 @@ show_best(res_model, "roc_auc")
 
 rf_best <-
   res_model |>
-  select_best("bal_accuracy")
+  select_best("roc_auc")
+  ## select_best("bal_accuracy")
 
 ## xgb_best <-
 ##   res_model |>
 ##   select_best("bal_accuracy")
 
-lr_best <-
-    res_model |>
-    show_best("bal_accuracy", n = 100) |>
-    mutate(mean = signif(mean, 2)) |>
-    arrange(desc(mean), desc(penalty), desc(mixture)) |>
-    print(n = 30)
-
-lr_best <- dplyr::slice(lr_best, 1)
-lr_best <- dplyr::slice(lr_best, 1)
+## lr_best <-
+##     res_model |>
+##     show_best("bal_accuracy", n = 100) |>
+##     mutate(mean = signif(mean, 2)) |>
+##     arrange(desc(mean), desc(penalty), desc(mixture)) |>
+##     print(n = 30)
 
 
 ## xgb_best <-
@@ -2063,13 +2401,13 @@ saveRDS(res_model, file.path("analysis", "relative", "models", "blood_flow_rf_mo
 saveRDS(res_model, file.path("analysis", "relative", "models", "csf_basic_rf_model.rds"))
 saveRDS(res_model, file.path("analysis", "relative", "models", "combined_rf_model.rds"))
 
-saveRDS(res_model, file.path("analysis", "relative", "models", "csf_flow_lr_model.rds"))
-saveRDS(res_model, file.path("analysis", "relative", "models", "blood_flow_lr_model.rds"))
-saveRDS(res_model, file.path("analysis", "relative", "models", "csf_basic_lr_model.rds"))
-saveRDS(res_model, file.path("analysis", "relative", "models", "combined_lr_model.rds"))
+## saveRDS(res_model, file.path("analysis", "relative", "models", "csf_flow_lr_model.rds"))
+## saveRDS(res_model, file.path("analysis", "relative", "models", "blood_flow_lr_model.rds"))
+## saveRDS(res_model, file.path("analysis", "relative", "models", "csf_basic_lr_model.rds"))
+## saveRDS(res_model, file.path("analysis", "relative", "models", "combined_lr_model.rds"))
 
 # build last model  ------------------------------------------
-last_lr_workflow <- finalize_workflow(lr_workflow, lr_best)
+## last_lr_workflow <- finalize_workflow(lr_workflow, lr_best)
 ## last_rf_workflow <- finalize_workflow(rf_workflow, rf_best)
 ## last_xgb_workflow <-  finalize_workflow(xgb_workflow,xgb_best)
 
@@ -2088,11 +2426,12 @@ last_rf_workflow <-
 #fit best model to train data and evaluate on test data
 set.seed(1234)
 
-last_fit <-
-  last_lr_workflow |>
-  last_fit(splits,
-           metrics = metric_set(accuracy, bal_accuracy, f_meas, roc_auc)
-           )
+## last_fit <-
+##   last_lr_workflow |>
+##   last_fit(splits,
+##            metrics = metric_set(accuracy, bal_accuracy, f_meas, roc_auc)
+##            )
+
 
 last_fit <-
   last_rf_workflow |>
@@ -2107,6 +2446,7 @@ last_fit <-
 ##            )
 
 final_metric <- collect_metrics(last_fit)
+
 
 plotConfMat <- function(last_fit, name) {
   collect_predictions(last_fit) |>
@@ -2130,31 +2470,48 @@ saveRDS(last_fit, file.path("analysis", "relative", "models", "blood_flow_rf_fin
 saveRDS(last_fit, file.path("analysis", "relative", "models", "csf_basic_rf_final_model.rds"))
 saveRDS(last_fit, file.path("analysis", "relative", "models", "combined_rf_final_model.rds"))
 
-#elast net mocdles
-saveRDS(last_fit, file.path("analysis", "relative", "models", "csf_flow_lr_final_model.rds"))
-saveRDS(last_fit, file.path("analysis", "relative", "models", "blood_flow_lr_final_model.rds"))
-saveRDS(last_fit, file.path("analysis", "relative", "models", "csf_basic_lr_final_model.rds"))
-saveRDS(last_fit, file.path("analysis", "relative", "models", "combined_lr_final_model.rds"))
+last_fit <- readRDS(file.path("analysis", "relative", "models", "csf_basic_rf_final_model.rds"))
+
+## #elast net mocdles
+## saveRDS(last_fit, file.path("analysis", "relative", "models", "csf_flow_lr_final_model.rds"))
+## saveRDS(last_fit, file.path("analysis", "relative", "models", "blood_flow_lr_final_model.rds"))
+## saveRDS(last_fit, file.path("analysis", "relative", "models", "csf_basic_lr_final_model.rds"))
+## saveRDS(last_fit, file.path("analysis", "relative", "models", "combined_lr_final_model.rds"))
 
 #vip with auc train/test
 last_fit |>
-    extract_fit_parsnip() |>
-    vip::vi() |>
-    dplyr::filter(Importance != 0) |>
-    ## mutate(Importance = if_else(Sign == "POS", Importance*-1, Importance)) |> # somehow wrong direction
-    ggplot(aes(x = Importance, y = fct_reorder(Variable, Importance)))+
-    geom_point(color = my_cols[2])+
-    geom_segment(aes(xend = 0, yend = Variable), color = my_cols[2])+
-    theme_bw()+
-    ylab(NULL)+
-    xlab("Predictor importance") +
-    theme(legend.position = "none")
+  extract_fit_parsnip() |>
+  vip::vi() |>
+  dplyr::filter(Importance != 0) |>
+  #filter top 10 important ones
+  dplyr::slice_max(order_by = Importance, n = 10) |>
+  ## mutate(Importance = if_else(Sign == "POS", Importance*-1, Importance)) |> # somehow wrong direction
+  ggplot(aes(x = Importance, y = fct_reorder(Variable, Importance)))+
+  geom_point(color = my_cols[2])+
+  geom_segment(aes(xend = 0, yend = Variable), color = my_cols[2])+
+  theme_bw()+
+  ylab(NULL)+
+  xlab("Predictor importance") +
+  theme(legend.position = "none")
 
 
-ggsave(file.path("analysis", "relative", "models", "CSF_flow_rf_vip.pdf"), width = 5, height = 3)
-ggsave(file.path("analysis", "relative", "models", "blood_flow_rf_vip.pdf"), width = 5, height = 3)
-ggsave(file.path("analysis", "relative", "models", "csf_basic_rf_vip.pdf"), width = 5, height = 3)
-ggsave(file.path("analysis", "relative", "models", "combined_rf_vip.pdf"), width = 5, height = 7)
+ggsave(file.path("analysis", "relative", "models", "CSF_flow_rf_vip.pdf"), width = 3, height = 2)
+ggsave(file.path("analysis", "relative", "models", "blood_flow_rf_vip.pdf"), width = 3, height = 2)
+ggsave(file.path("analysis", "relative", "models", "csf_basic_rf_vip.pdf"), width = 3, height = 2)
+ggsave(file.path("analysis", "relative", "models", "combined_rf_vip.pdf"), width = 3, height = 2)
+
+last_fit |>
+  collect_metrics(summarize = TRUE)
+
+metrics(last_fit, truth, predicted)
+
+yardstick::multimetric()
+
+last_fit |>
+  collect_predictions() |>
+  group_by(dx_icd_level2) |>
+  accuracy(dx_icd_level2, .pred_class)
+
 
 #perform ROC test between results of model and single parameter
 ## roc_res_multi <-
@@ -2443,3 +2800,6 @@ ggsave(plot = interval_rel_plot, file.path("analysis", "relative", "interval", "
 
 ## intracranial_hypertension_plot <- patchwork::wrap_plots(interval_intracranial_hypertension, ncol = 4)
 ## ggsave(plot = intracranial_hypertension_plot, file.path("analysis", "relative", "interval", "intracranial_hypertension_abs_norm.pdf"), width = 17, height = 60, limitsize = FALSE)
+
+#shc
+shc_result <- shc(data, metric="euclidean", linkage="ward.D2")
