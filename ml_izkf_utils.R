@@ -93,27 +93,28 @@ ggsave(file.path("analysis", project, "abundance", glue::glue("dotplot_{data_quo
 
 }
 
-count_category <- function(category) {
-    bind_rows(csf_data, blood_data) |>
-        dplyr::ungroup() |>
+count_category <- function(data, category) {
+    data |>
         dplyr::count(.data[[category]]) |>
         dplyr::arrange(desc(n)) |>
         readr::write_csv(file.path("analysis", project, "categories", glue::glue("count_{category}.csv")))
 }
 
-plot_category <- function(category) {
-    bind_rows(csf_data, blood_data) |>
-    count(.data[[category]])|>
-    drop_na() |>
-    ggplot(aes(x = reorder(.data[[category]], n), y = n, fill = .data[[category]])) +
-    geom_col() + 
-    xlab(NULL) +
-    ylab(NULL)+
-    theme_bw() +
-    theme(legend.position = "none",
-          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))+
-    coord_flip()
-ggsave(file.path("analysis", project, "categories", glue::glue("count_{category}.pdf")), width = 7, height = 7, device = cairo_pdf)
+plot_category <- function(data, category, width, height) {
+    data |>
+        count(.data[[category]]) |>
+        drop_na() |>
+        ggplot(aes(x = reorder(.data[[category]], n), y = n, fill = .data[[category]])) +
+        geom_col() +
+        xlab(NULL) +
+        ylab(NULL) +
+        theme_bw() +
+        theme(
+            legend.position = "none",
+            axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)
+        ) +
+        coord_flip()
+    ggsave(file.path("analysis", project, "categories", glue::glue("count_{category}.pdf")), width = width, height = height, device = cairo_pdf)
 }
 
 #function to create csf heatmap for grouped mean
@@ -450,4 +451,21 @@ topBarPlot <- function(data, cluster, tfidf_cutoff, qval_cutoff) {
          width = 6,
          height = height,
          device = cairo_pdf)
+}
+
+# function to create line plots over time interval
+LinePlot <- function(data_disease, data_control, par, xlim_end) {
+  median_par_control <- median(data_control[[par]], na.rm = TRUE)
+  res_plot <-
+    data_disease |>
+    ggplot(aes(x = interval, y = .data[[par]], color = dx_icd_level2, fill = dx_icd_level2)) +
+    geom_point(alpha = 0.5, size = 0.5) +
+    theme_bw() +
+    xlab("days") +
+    ylab("") +
+    geom_smooth(method = "loess", se = TRUE, span = 1.0) +
+    theme(legend.position = "none") +
+    ggtitle(glue::glue("{par}")) +
+    geom_hline(yintercept = median_par_control, linetype = "dashed", color = "blue")
+    return(res_plot)
 }
