@@ -29,6 +29,8 @@ data_combined_tidymodels_level1 <-
     dplyr::mutate(dx_icd_level1 = factor(dx_icd_level1)) |>
     dplyr::select(dx_icd_level1, granulos_CSF:lactate_CSF)
 
+dplyr::count(data_combined_tidymodels_level1, dx_icd_level1)
+
 # only blood flow ----
 data_blood_tidymodels_level1 <-
     data_combined_tidymodels_level1 |>
@@ -52,10 +54,10 @@ all.equal(
 )
 
 set.seed(1234)
-splits <- initial_split(data_blood_tidymodels_level1, prop = 0.75, strata = dx_icd_level1)
+# splits <- initial_split(data_blood_tidymodels_level1, prop = 0.75, strata = dx_icd_level1)
 # splits <- initial_split(data_csf_tidymodels_level1, prop = 0.75, strata = dx_icd_level1)
 # splits <- initial_split(data_basic_tidymodels_level1, prop = 0.75, strata = dx_icd_level1)
-# splits <- initial_split(data_combined_tidymodels_level1, prop = 0.75, strata = dx_icd_level1)
+splits <- initial_split(data_combined_tidymodels_level1, prop = 0.75, strata = dx_icd_level1)
 
 train_data <- training(splits)
 test_data <- testing(splits)
@@ -158,13 +160,18 @@ last_fit <-
 
 final_metric <- collect_metrics(last_fit)
 
-# function to plot confusion matrix ---- 
-# no lint
+last_fit <- readRDS(file.path("analysis", "relative", "models", "level1_blood_rf_final_model.rds"))
+last_fit <- readRDS(file.path("analysis", "relative", "models", "level1_csf_rf_final_model.rds"))
+last_fit <- readRDS(file.path("analysis", "relative", "models", "level1_basic_rf_final_model.rds"))
+last_fit <- readRDS(file.path("analysis", "relative", "models", "level1_combined_rf_final_model.rds"))
+
+# function to plot confusion matrix  not normalized ----
 plotConfMat <- function(last_fit, name) {
-  collect_predictions(last_fit) |>  # nolint
+  collect_predictions(last_fit) |> # nolint
     conf_mat(truth = dx_icd_level1, estimate = .pred_class) |> # nolint
     autoplot(type = "heatmap") +
-    viridis::scale_fill_viridis() +
+    # viridis::scale_fill_viridis() +
+    scale_fill_gradient(low = "lightblue", high = "lightblue") +
     ggtitle(glue::glue("{name} ROC AUC {signif(final_metric$.estimate,2)[4]}, BACC {signif(final_metric$.estimate,2)[2]}")) +
     theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.3))
   ggsave(file.path("analysis", "relative", "models", glue::glue("{name}_rf_conf_mat.pdf")), width = 5, height = 5)
@@ -173,6 +180,34 @@ plotConfMat <- function(last_fit, name) {
 plotConfMat(last_fit, "level1_blood")
 plotConfMat(last_fit, "level1_csf")
 plotConfMat(last_fit, "level1_basic")
+plotConfMat(last_fit, "level1_combined")
+
+# # function to plot confusion matrix normalized ----
+# plotConfMat <- function(last_fit, name) {
+#   conf_mat <- collect_predictions(last_fit) |> # nolint
+#     conf_mat(truth = dx_icd_level1, estimate = .pred_class)
+#   levels <- colnames(conf_mat$table)
+#   conf_mat$table |>
+#     as.data.frame.table() |>
+#     pivot_wider(names_from = Prediction, values_from = Freq) |>
+#     mutate(across(all_of(levels), function(x) (x - mean(x)) / sd(x))) |>
+#     pivot_longer(all_of(levels), names_to = "Prediction", values_to = "Freq") |>
+#     mutate(Prediction = factor(Prediction, rev(levels))) |>
+#     ggplot2::ggplot(ggplot2::aes(x = Truth, y = Prediction, fill = Freq)) +
+#     ggplot2::geom_tile() +
+#     ggplot2::theme(
+#       panel.background = ggplot2::element_blank(),
+#       legend.position = "none"
+#     ) +
+#     ggplot2::geom_text(mapping = ggplot2::aes(label = signif(Freq, 2))) +
+#     viridis::scale_fill_viridis() +
+#     ggtitle(glue::glue("{name} ROC AUC {signif(final_metric$.estimate,2)[4]}, BACC {signif(final_metric$.estimate,2)[2]}")) +
+#     theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.3))
+#   ggsave(file.path("analysis", "relative", "models", glue::glue("{name}_rf_conf_mat.pdf")), width = 5, height = 5)
+# }
+
+
+
 # plotConfMat(last_fit, "level1_combined")
 
 #rf models ----
@@ -204,4 +239,11 @@ last_fit |>
 ggsave(file.path("analysis", "relative", "models", "level1_blood_rf_vip.pdf"), width = 3, height = 2)
 ggsave(file.path("analysis", "relative", "models", "level1_csf_rf_vip.pdf"), width = 3, height = 2)
 ggsave(file.path("analysis", "relative", "models", "level1_basic_rf_vip.pdf"), width = 3, height = 2)
-# ggsave(file.path("analysis", "relative", "models", "level1_combined_rf_vip.pdf"), width = 3, height = 2)
+
+
+  combined_complete |>
+    dplyr::filter(dx_icd_level1 %in% sel_icd_level1) |>
+    dplyr::mutate(dx_icd_level1 = factor(dx_icd_level1)) |>
+    dplyr::select(file_stem_lukas1, dx_icd_level1, granulos_CSF:lactate_CSF)|>
+    write_csv("lukas_predict_level1.csv")
+

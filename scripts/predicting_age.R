@@ -13,6 +13,9 @@ my_cols <- unname(Polychrome::createPalette(100, RColorBrewer::brewer.pal(8, "Se
 ## preparing data ----
 combined_complete <- qread("final_one_rel_combined_complete.qs")
 
+length(unique(combined_complete$dx_icd_level1))
+length(unique(combined_complete$dx_icd_level2))
+
 vars_sel <-
   combined_complete |>
   select(granulos_CSF:lactate_CSF) |>
