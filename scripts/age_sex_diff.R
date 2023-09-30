@@ -11,15 +11,6 @@ combined_data_ctrl <-
   combined_complete |>
   dplyr::filter(dx_icd_level2 == "somatoform")
 
-combined_data_ctrl |>
-  ggplot(aes(x = age)) +
-  geom_histogram()
-
-csf_data |>
-  dplyr::filter(dx_icd_level2 == "somatoform") |>
-  arrange(age) |>
-  select(age, hd, dx_icd_level2)
-
 vars_cor <-
   combined_complete |>
   select(granulos_CSF:lactate_CSF) |>
