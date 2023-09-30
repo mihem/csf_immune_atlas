@@ -21,8 +21,6 @@ all_data_multi |>
   dplyr::filter(patient_id == "111112") |>
   dplyr::select(patient_id, sample_pair_id, tissue, measure_date, aufnahme, interval)
 
-
-
 #filter out if event_count below 3000 for CSF -> 155 removed
 #filter out if event_count below 5000 for blood -> 51 removed
 all_data_multi_filter <-

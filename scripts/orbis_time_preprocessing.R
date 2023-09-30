@@ -5,6 +5,7 @@ library(tidyverse)
 library(readxl)
 library(lubridate)
 library(qs)
+library(hms)
 
 ## load data ----
 times_raw <- read_xlsx("./flow_mit_zeit_v4.xlsx", col_types = c(rep("numeric", 2), rep("text", 11)))
@@ -23,10 +24,10 @@ times <-
     dplyr::filter(ART == "BEFUND") |>
     select(PID, FALLNR, `ANLAGEDATUM Orbis`, PROBENENTNAHMEZEIT, AUFTRAGSANNAHMEZEIT) |>
     mutate(`ANLAGEDATUM Orbis` = lubridate::dmy(`ANLAGEDATUM Orbis`)) |>
-    mutate(PROBENENTNAHMEZEIT = lubridate::hms(PROBENENTNAHMEZEIT)) |>
-    mutate(AUFTRAGSANNAHMEZEIT = lubridate::hms(AUFTRAGSANNAHMEZEIT)) |>
+    mutate(PROBENENTNAHMEZEIT = hms::as_hms(PROBENENTNAHMEZEIT)) |>
+    mutate(AUFTRAGSANNAHMEZEIT = hms::as_hms(AUFTRAGSANNAHMEZEIT)) |>
     mutate(diff_time = PROBENENTNAHMEZEIT - AUFTRAGSANNAHMEZEIT) |>
-    mutate(measure_time = AUFTRAGSANNAHMEZEIT - lubridate::hours(1)) |>
+    mutate(measure_time = hms::as_hms(AUFTRAGSANNAHMEZEIT - hms::as_hms("01:00:00"))) |>
     dplyr::filter(measure_time > lubridate::hms("08:00:00")) |>
     dplyr::filter(measure_time < lubridate::hms("16:00:00")) |>
     group_by(PID) |>
@@ -40,7 +41,7 @@ times <-
 
 # # sanity checks
 # times |>
-# group_by(PID) |>
+# group_by(pid) |>
 # dplyr::filter(n() >1)
 
 # times |>
@@ -55,7 +56,7 @@ combined_complete_time <-
     combined_complete |>
     dplyr::left_join(times, by = c("pid", "fallnummer", "measure_date"))
 
-qs::qsave(combined_complete_v2, "combined_complete_time.qs")
+qs::qsave(combined_complete_time, "combined_complete_time.qs")
 
 #sanity checks
 #217 missing because of time that is not plausible or not available in the expert
@@ -91,8 +92,3 @@ times |>
 
 all.equal(times$PROBENENTNAHMEZEIT[1:10], times$`ANLAGEZEIT Orbis`[1:10])
 all.equal(times_clean$PROBENENTNAHMEZEIT[1:10], times_clean$`ANLAGEZEIT Orbis`[1:10])
-
-# best is PROBENENTNAHMEZEIT
-# for samples from 2011 and 2012 use AUFTRAGSANNEHMEZEIT
-times |>
-select()
