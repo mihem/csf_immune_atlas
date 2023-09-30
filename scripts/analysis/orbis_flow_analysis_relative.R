@@ -14,12 +14,9 @@ library(SoupX)
 library(ICD10gm)
 library(datawizard)
 library(WRS2)
-
 library(tidymodels)
 library(finetune)
 options(tidymodels.dark = TRUE)
-##
-## library(themis) # for up/downsampling
 
 source("ml_izkf_utils.R")
 project <- "relative"
@@ -52,7 +49,6 @@ combined_norm_complete <- qs::qread("final_one_rel_combined_norm_complete.qs")
 combined_umap_full <- qs::qread("final_one_rel_umap_combined.qs")
 
 data_combined_multi <- qs::qread("final_multi_comb_rel.qs")
-## combined_ratio <- qs::qread("combined_ratio.qs")
 
 sum(all_data_one_fil$blood$event_count) #1313 million events
 sum(all_data_one_fil$csf$event_count)# 233 million events
@@ -67,37 +63,6 @@ sum(all_data_one_fil$csf$event_count)# 233 million events
 #all_data <- read_csv("orbis_flow_rel.csv")
 all_data_one <- read_csv("orbis_flow_rel_one.csv")
 all_data <- read_csv("orbis_flow_rel.csv")
-str(all_data)
-skimr::skim(all_data)
-
-
-all_data |>
-  select(patient_id, tissue, dx_biobanklist_level2) |>
-  drop_na(dx_biobanklist_level2) |>
-  distinct(patient_id, .keep_all = TRUE)
-
-
-min(all_data$measure_date_orbis, na.rm = TRUE)
-max(all_data$measure_date_orbis, na.rm = TRUE)
-
-min(all_data_one_fil$blood$age, na.rm = TRUE)
-max(all_data_one_fil$blood$age, na.rm = TRUE)
-
-
-all_data_one_fil$blood |>
-  dplyr::filter(age < 18) |>
-  dplyr::arrange(age) |>
-  select(patient_id, age, dx_icd_level2, hd)
-
-
-names(all_data_one_fil$blood)
-
-all_data |>
-    dplyr::group_by(patient_id, tissue) |>
-    dplyr::filter(n() > 1) |>
-    dplyr::ungroup() |>
-    dplyr::count(patient_id) |>
-    arrange(desc(n))
 
 subfolders <- file.path(
   "analysis",
@@ -106,74 +71,8 @@ subfolders <- file.path(
 )
 lapply(subfolders, dir.create, recursive = TRUE)
 
-# filter based on admission date ------------------------------------------
-# remove all without aufnahme date (loose around 1000 samples)
-# calculate difference between measure date and admission date
-# take absolute value (3 times small negative values becase of technical errors)
-all_data_one_filter_v1 <-
-  all_data_one |>
-  tidyr::drop_na(aufnahme, measure_date_orbis) |>
-  dplyr::mutate(aufnahme = lubridate::as_date(aufnahme)) |>
-  dplyr::mutate(lp_interval = abs(as.double(difftime(measure_date_orbis, aufnahme, units = "days")))) |>
-  dplyr::filter(lp_interval < 8)
-
-# section filter data ------------------------------------------
-ggplot(all_data_one_filter_v1, aes(x = harvest_volume, y = event_count, color = tissue)) +
-    geom_point(size = 0.1) +
-    scale_x_log10() +
-    scale_y_log10() +
-    theme_bw()
-ggsave(file.path("analysis", "relative", "qc", "harvest_volume_event_counts.pdf"), width = 5, height = 5)
-
-ggplot(all_data_one_filter_v1, aes(event_count, fill = tissue)) +
-    geom_histogram(data = dplyr::filter(all_data_one_filter_v1, tissue == "CSF"), fill = "blue", bins = 100, alpha = 0.2) +
-    geom_histogram(data = dplyr::filter(all_data_one_filter_v1, tissue == "blood"), fill = "red", bins = 100, alpha = 0.2) +
-    scale_x_log10() +
-    scale_y_log10() +
-    geom_vline(aes(xintercept = 3000)) +
-    geom_vline(aes(xintercept = 7000)) +
-    theme_bw()
-ggsave(file.path("analysis", "relative", "qc", "cutoff_event_count.pdf"), width = 5, height = 5)
-
-#filter out if event_count below 3000 for CSF -> 155 removed
-#filter out if event_count below 5000 for blood -> 51 removed
-all_data_one_filter_v2 <-
-    all_data_one_filter_v1 |>
-    dplyr::filter(!(event_count < 3000 & tissue == "CSF")) |>
-    dplyr::filter(!(event_count < 7000 & tissue == "blood"))
-
-csf_data <-
-    all_data_one_filter_v2 |>
-    dplyr::filter(tissue == "CSF") |>
-    dplyr::mutate(OCB = ifelse(OCB == 2 | OCB == 3, 1, 0)) |>
-    dplyr::rename(sex = geschlecht) |>
-    dplyr::mutate(sex = case_when(sex == "W" ~ "f",
-                                   sex == "M" ~ "m",
-                                    TRUE ~ NA_character_))
-
-csf_naive_data <-
-    csf_data |>
-    dplyr::filter(tx_biobanklist == "naive")
-
-blood_data <-
-    all_data_one_filter_v2 |>
-    dplyr::filter(tissue == "blood") |>
-    select(where(function(x) !all(is.na(x)))) |>
-    dplyr::rename(sex = geschlecht) |>
-    dplyr::mutate(sex = case_when(sex == "W" ~ "f",
-                                   sex == "M" ~ "m",
-                                    TRUE ~ NA_character_))
-
-blood_naive_data <-
-    blood_data |>
-    dplyr::filter(tx_biobanklist == "naive")
-
-all_data_one_fil <- list(csf = csf_data, blood = blood_data)
-qs::qsave(all_data_one_fil, "final_one_rel.qs")
-
 # section histogram ------------------------------------------
 # visualize data
-
 all_data_one_long <-
     bind_rows(csf_data, blood_data) |>
     select(tissue, granulos:HLA_DR_T, lymphos_basic:lactate, harvest_volume, event_count) |>
@@ -196,7 +95,6 @@ lapply(sel_categories, count_category, data = combined_complete)
 
 plot_category(data = combined_complete, category = "dx_icd_level1", width = 4, height = 2)
 plot_category(data = combined_complete, category = "dx_icd_level2", width = 7, height = 7)
-
 
 # age sex histograms ------------------------------------------
 sex_age_histogram <-
@@ -239,7 +137,6 @@ corrplot(cor_data, order = "hclust", method = "color", col = phmap_colors, tl.co
 dev.off()
 
 ##correlation with age difficult because correlates strongly with diseases
-
 
 # impute data with mice ------------------------------------------
 #impute data using the mice package and pmm method
