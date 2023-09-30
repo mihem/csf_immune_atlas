@@ -2,7 +2,6 @@
 *
 
 # But not these files...
-!.gitignore
 !*.R
 
 # ...even if they are in subdirectories
@@ -13,3 +12,4 @@
 #!*/a/b/c/*
 .Rproj.user
 old/
+scripts/preprocessing
