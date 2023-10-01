@@ -2,8 +2,6 @@
 library(tidyverse)
 library(qs)
 
-project <- "relative"
-
 # section read in processed but unfilter  ------------------------------------------
 #all_data duplicate (measure date repeated) removed, but multiple measurements of one patients kept
 #all_data_one only one measurement per patient kept
@@ -55,18 +53,6 @@ all_data_one_filter_v2 <-
     dplyr::filter(!(event_count < 3000 & tissue == "CSF")) |>
     dplyr::filter(!(event_count < 7000 & tissue == "blood"))
 
-csf_data <-
-    all_data_one_filter_v2 |>
-    dplyr::filter(tissue == "CSF") |>
-    dplyr::mutate(OCB = ifelse(OCB == 2 | OCB == 3, 1, 0)) |>
-    dplyr::rename(sex = geschlecht) |>
-    dplyr::mutate(sex = case_when(sex == "W" ~ "f",
-                                   sex == "M" ~ "m",
-                                    TRUE ~ NA_character_))
-csf_naive_data <-
-    csf_data |>
-    dplyr::filter(tx_biobanklist == "naive")
-
 blood_data <-
     all_data_one_filter_v2 |>
     dplyr::filter(tissue == "blood") |>
@@ -75,10 +61,6 @@ blood_data <-
     dplyr::mutate(sex = case_when(sex == "W" ~ "f",
                                    sex == "M" ~ "m",
                                     TRUE ~ NA_character_))
-
-blood_naive_data <-
-    blood_data |>
-    dplyr::filter(tx_biobanklist == "naive")
 
 all_data_one_fil <- list(csf = csf_data, blood = blood_data)
 qs::qsave(all_data_one_fil, "final_one_rel.qs")
@@ -96,3 +78,19 @@ combined_data <-
   rename_with(function(x) str_remove(x, "_CSF"), c(protein_CSF_CSF:IgM_ratio_CSF, glucose_CSF_CSF))
 
 qs::qsave(combined_data, "final_one_rel_combined.qs")
+
+# section histogram ------------------------------------------
+# visualize data
+all_data_one_long <-
+    bind_rows(csf_data, blood_data) |>
+    select(tissue, granulos:HLA_DR_T, lymphos_basic:lactate, harvest_volume, event_count) |>
+    pivot_longer(granulos:event_count, names_to = "variable", values_to = "value")
+
+ ggplot(all_data_one_long, aes(x = value, fill = tissue)) +
+#    geom_density(alpha = 0.3) +
+    geom_histogram(data = dplyr::filter(all_data_one_long, tissue == "blood"), fill = "red", bins = 100, alpha = 0.2) +
+    geom_histogram(data = dplyr::filter(all_data_one_long, tissue == "CSF"), fill = "blue", bins = 100, alpha = 0.2) +
+    facet_wrap(vars(variable), scales = "free", ncol = 4) +
+    theme_bw()
+
+ggsave(file.path("analysis", "relative", "qc", "histogram.pdf"), width = 10, height = 20)
