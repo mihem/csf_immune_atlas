@@ -1,4 +1,3 @@
-
 # load libraries ----
 library(tidyverse)
 library(qs)
@@ -83,3 +82,17 @@ blood_naive_data <-
 
 all_data_one_fil <- list(csf = csf_data, blood = blood_data)
 qs::qsave(all_data_one_fil, "final_one_rel.qs")
+
+all_data_one_fil <- qs::qread("final_one_rel.qs")
+csf_data <- all_data_one_fil$csf
+blood_data <- all_data_one_fil$blood
+
+combined_data <- 
+  bind_rows(csf_data, blood_data) |>
+  select(sample_pair_id, tissue, granulos:lactate, dx_icd_level1:dx_andi_level3, sex, age) |>
+  pivot_wider(names_from = tissue, values_from = granulos:lactate) |>
+  select(where(function(x) !all(is.na(x)))) |>
+  select(-sample_pair_id) |>
+  rename_with(function(x) str_remove(x, "_CSF"), c(protein_CSF_CSF:IgM_ratio_CSF, glucose_CSF_CSF))
+
+qs::qsave(combined_data, "final_one_rel_combined.qs")
