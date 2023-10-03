@@ -18,7 +18,7 @@ subfolders <- file.path(
 lapply(subfolders, dir.create, recursive = TRUE)
 
 # filter based on admission date ------------------------------------------
-# remove all without aufnahme date (loose around 1000 samples)
+# remove all without admission date
 # calculate difference between measure date and admission date
 # take absolute value (3 times small negative values becase of technical errors)
 all_data_one_filter_v1 <-
