@@ -1,3 +1,9 @@
+# load libraries ---
+library(tidyverse)
+library(MatchIt)
+library(qs)
+
+
 # patients with more than one lumbar puncture ------------------------------------------
 # remove if no aufnahme date present, around 2000 cases
 # calculate time between first sample measure data and all following (convert to numeric for future analysis), absolute because of technical error
@@ -47,139 +53,11 @@ data_combined_multi <-
 
 qs::qsave(data_combined_multi, "final_multi_comb_rel.qs")
 
-
-## data_combined_multi_norm <-
-##   data_combined_multi |>
-##     ## drop_na() |>
-##     recipes::recipe(sample_pair_id ~ .) |>
-##     bestNormalize::step_orderNorm(granulos_CSF:lactate_CSF) |>
-##     recipes::prep() |>
-##     recipes::bake(new_data = NULL)
-
-
-# absolute numbers for longitudinal analysis  ------------------------------------------
-# remove all columns that are not finite
-#convert concentration per ml in concentration per µl
-
-## all_data_abs_multi <-
-##   read_csv("orbis_flow_concentration.csv") |>
-##   dplyr::filter(if_all(granulos:bright_NK, function(x) is.finite(x))) |>
-##   tidyr::drop_na(aufnahme, measure_date_orbis) |>
-##   dplyr::group_by(patient_id, tissue) |>
-##   dplyr::filter(n() > 1) |>
-##   dplyr::mutate(interval = abs(as.numeric(difftime(measure_date, min(aufnahme), units = "days")))) |>
-##   dplyr::ungroup() |>
-##   dplyr::mutate(patient_id = as.character(patient_id)) |>
-##   dplyr::mutate(across(granulos:bright_NK, function(x) x/1000))
-
-
-## all_data_abs_multi_filter <-
-##     all_data_abs_multi |>
-##     dplyr::filter(!(event_count < 3000 & tissue == "CSF")) |>
-##     dplyr::filter(!(event_count < 7000 & tissue == "blood"))
-
-## csf_data_multi_abs <-
-##     all_data_abs_multi_filter |>
-##     dplyr::filter(tissue == "CSF") |>
-##     dplyr::mutate(OCB = ifelse(OCB == 2 | OCB == 3, 1, 0))
-
-## blood_data_multi_abs <-
-##     all_data_abs_multi_filter |>
-##     dplyr::filter(tissue == "blood") |>
-##     select(where(function(x) !all(is.na(x))))
-
-## data_combined_multi_abs <-
-##   bind_rows(csf_data_multi_abs, blood_data_multi_abs) |>
-##   select(patient_id, sample_pair_id,dx_icd_level2, interval, granulos:lactate, tissue) |>
-##   pivot_wider(names_from = tissue, values_from = granulos:lactate) |>
-##   select(where(function(x) !all(is.na(x)))) |>
-##   rename_with(function(x) str_remove(x, "_CSF"), c(protein_CSF_CSF:IgM_ratio_CSF, glucose_CSF_CSF))
-
-## data_combined_multi_abs_norm <-
-##   data_combined_multi_abs |>
-##   recipes::recipe(dx_icd_level2 ~ .) |>
-##   bestNormalize::step_orderNorm(c(granulos_CSF:lactate_CSF)) |>
-##   recipes::prep() |>
-##   recipes::bake(new_data = NULL)
-
-## names(data_combined_multi_abs_norm)
-#    recipes::step_invlogit(lymphos_basic:cell_count, plasma, OCB) |>
-
-## qs::qsave(data_combined_multi_abs, "final_multi_comb_abs.qs")
-
-## normalize combined blood csf with ratios ------------------------------------------
-
-#normalize leads to even smaller effects
-## data_combined_multi_norm <-
-##   data_combined_multi |>
-##   recipes::recipe(sample_pair_id ~ .) |>
-##   bestNormalize::step_orderNorm(c(granulos_CSF:lactate_CSF)) |>
-##   recipes::prep() |>
-##   recipes::bake(new_data = NULL)
-
-## LinePlot <- function(data_disease, data_control, par, xlim_end) {
-  #rfilter certain diagnosis and only keep values before a certain interval
-  #remove all values that do not have at least two measurements in this interval
-  # make interval discrete for boxplots
-  ## df <-
-  ##   data |>
-  ##   dplyr::filter(dx_icd_level2 %in% diagnosis) |>
-  ##   dplyr::filter(interval < xlim_end) |>
-  ##   dplyr::group_by(patient_id) |>
-  ##   dplyr::filter(n() > 1) |>
-  ##   dplyr::ungroup() |>
-  ##   dplyr::mutate(patient_id = as.character(patient_id))
-  ## ##   dplyr::mutate(interval_cut = cut_number(interval, n_interval, boundary = 0))
-
-## ## # important: calculate p values of ALL parameters, then adjust, then select the one you are interested in
-##   cor_res <-
-##     lapply(all_pars,
-##            FUN = function(x) tidy(cor.test(df$interval, df[[x]], method = "pearson"))) |>
-##     set_names(all_pars) |>
-##     bind_rows(.id = "var1") |>
-##     mutate(p_adjust = round(p.adjust(p.value, method = "BH", n = length(all_pars)), 2)) |>
-##     mutate(estimate = round(estimate, 2)) |>
-##     dplyr::filter(var1 == par)
-
-##   res_plot <-
-##     df |>
-##     ggplot(aes(x = interval, y = .data[[par]], color = dx_icd_level2, fill = dx_icd_level2)) +
-##     ## geom_line(alpha = 0.3) +
-##     ## geom_line(aes(color = patient_id), alpha = 0.3) +
-##     ## geom_point(aes(color = patient_id), alpha = 0.3) +
-##     geom_point(alpha = 0.5, size = 0.5) +
-##     theme_bw() +
-##     xlab("days") +
-##     ylab("") +
-##     geom_smooth(method = "loess", se = FALSE, span = 1.0) +
-##     theme(legend.position = "none") +
-##     ggtitle(glue::glue("{par}")) +
-##     return(res_plot)
-## }
-
-
-count(data_combined_multi, dx_icd_level2) |>
-  arrange(desc(n)) |>
-  dplyr::filter(n > 10) |>
-  print(n = Inf)
-
-#bac, viral, iih manuell überprüfen?
-
 combined_vars <-
   data_combined_multi |>
   select(granulos_CSF:lactate_CSF) |>
   select(-OCB_CSF) |>
   names()
-
-
-## interval_cols <- setNames(RColorBrewer::brewer.pal(3, "Set2"), c("viral encephalitis", "bacterial meningitis"))
-## interval_cols <- setNames(RColorBrewer::brewer.pal(3, "Set2"), c("viral encephalitis", "bacterial meningitis", "idiopathic intracranial hypertension"))
-## interval_cols <- setNames(RColorBrewer::brewer.pal(3, "Set2"), c("viral encephalitis", "bacterial meningitis", "ischemic stroke"))
-
-## #remove unplausible lactate value
-## data_combined_multi <-
-##   data_combined_multi |>
-##   dplyr::mutate(lactate_CSF = ifelse(lactate_CSF > 10, NA, lactate_CSF))
 
 # filter bacterial meningitis and only keep values for less than 30 days and with at least two measurements in the interval
 data_combined_multi_bm <-
