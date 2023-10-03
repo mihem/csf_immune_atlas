@@ -1,4 +1,4 @@
-
+# load libraries ----
 library(tidyverse)
 library(bestNormalize)
 library(qs)
@@ -8,26 +8,12 @@ library(Rphenoannoy)
 library(pals)
 
 source("ml_izkf_utils.R")
-project <- "relative"
 
-# section read in final data for analysis ------------------------------------------
-all_data_one_fil <- qs::qread("final_one_rel.qs")
-
-csf_data <- all_data_one_fil$csf
-blood_data <- all_data_one_fil$blood
-
-all_data_one_complete <- qs::qread("final_one_rel_complete.qs")
-csf_data_complete <- all_data_one_complete$csf
-blood_data_complete <- all_data_one_complete$blood
-
-all_data_norm_complete <- qs::qread("final_one_rel_norm_complete.qs")
-csf_norm_complete <- all_data_norm_complete$csf
-blood_norm_complete <- all_data_norm_complete$blood
-
-combined_complete <- qread("final_one_rel_combined_complete.qs")
+# read in final data for analysis ----
+combined_norm_complete <- qs::qread("final_one_rel_combined_norm_complete.qs")
 
 #################################################################################################################
-# section dimension reduction overview
+# notes on dimension reduction overview
 #################################################################################################################
 # subjective evaluation of different dimension reduction methods for this dataset
 #PCA - bad
