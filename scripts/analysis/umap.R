@@ -122,12 +122,6 @@ abundance_combined_soupx <-
   tibble()
 
 lapply(lookup_cluster$cluster_name, abundanceCategoryPlot, data = abundance_combined_soupx)
-lapply(as.character(0:7), abundanceCategoryPlot, data = abundance_combined_soupx)
-
-rownames(combined_dx_icd_level2_matrix)
-
-names(combined_umap_full)
-str(combined_dx_icd_level2_matrix)
 
 #  section topmarkers for clusters combined ------------------------------------------
 #quickmarkers
