@@ -137,12 +137,12 @@ combined_matrix <-
     as.matrix() |>
     t()
 
-quickmarkers_combined_var <- SoupX::quickMarkers(combined_matrix, combined_umap_full$cluster, FDR = 0.1, N = 100, expressCut = 0.9) |>
-    tibble()
+# quickmarkers_combined_var <- SoupX::quickMarkers(combined_matrix, combined_umap_full$cluster, FDR = 0.1, N = 100, expressCut = 0.9) |>
+#     tibble()
 
-lapply(lookup_cluster$cluster_name, topBarPlot, data = quickmarkers_combined_var, tfidf_cut = 0.4, qval_cutoff = 0.001)
+# lapply(lookup_cluster$cluster_name, topBarPlot, data = quickmarkers_combined_var, tfidf_cut = 0.4, qval_cutoff = 0.001)
 
-# or as a dotplot
+# dotplot
 quickmarkers_res_combined <- SoupX::quickMarkers(combined_matrix, combined_umap_full$cluster, FDR = 0.01, N = 100, expressCut = 0.9) |>
     tibble()
 
