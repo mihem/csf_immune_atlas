@@ -7,7 +7,7 @@ library(uwot)
 library(Rphenoannoy)
 library(pals)
 
-source("ml_izkf_utils.R")
+source("scripts/analysis/ml_izkf_utils.R")
 
 # read in final data for analysis ----
 combined_norm_complete <- qs::qread("final_one_rel_combined_norm_complete.qs")
