@@ -57,7 +57,7 @@ plot <- lapply(dx_levels, FPlot, data = data_encode, scale = "cat", size = 0.1, 
 patchwork::wrap_plots(plot, ncol = 4)
 height <- ceiling(length(dx_levels)/4)*2
 data_quo <- deparse(substitute(data))
-ggsave(file.path("analysis", project, "feature", paste0("fplot_dx_", data_quo, "_", dx, ".png")), width = 7, height = height, limitsize = FALSE)
+ggsave(file.path("analysis", "relative", "feature", paste0("fplot_dx_", data_quo, "_", dx, ".png")), width = 7, height = height, limitsize = FALSE)
 }
 
 
@@ -89,7 +89,7 @@ data_abundance |>
 
 data_quo <- deparse(substitute(data))
 
-ggsave(file.path("analysis", project, "abundance", glue::glue("dotplot_{data_quo}_{category}_abundance.pdf")), width = 5, height = height)
+ggsave(file.path("analysis", "relative", "abundance", glue::glue("dotplot_{data_quo}_{category}_abundance.pdf")), width = 5, height = height)
 
 }
 
@@ -97,7 +97,7 @@ count_category <- function(data, category) {
     data |>
         dplyr::count(.data[[category]]) |>
         dplyr::arrange(desc(n)) |>
-        readr::write_csv(file.path("analysis", project, "categories", glue::glue("count_{category}.csv")))
+        readr::write_csv(file.path("analysis", "relative", "categories", glue::glue("count_{category}.csv")))
 }
 
 plot_category <- function(data, category, width, height) {
@@ -114,7 +114,7 @@ plot_category <- function(data, category, width, height) {
             axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)
         ) +
         coord_flip()
-    ggsave(file.path("analysis", project, "categories", glue::glue("count_{category}.pdf")), width = width, height = height, device = cairo_pdf)
+    ggsave(file.path("analysis", "relative", "categories", glue::glue("count_{category}.pdf")), width = width, height = height, device = cairo_pdf)
 }
 
 #function to create csf heatmap for grouped mean
@@ -151,7 +151,7 @@ phmap_group <- pheatmap::pheatmap(phmap_data_norm,
         clustering_method = "ward.D2",
         border_color = NA
          )
-grDevices::cairo_pdf(file.path("analysis", project, "heatmap", glue::glue("hmap_{label}_{category}.pdf")), width = 12, height = height)
+grDevices::cairo_pdf(file.path("analysis", "relative", "heatmap", glue::glue("hmap_{label}_{category}.pdf")), width = 12, height = height)
 print(phmap_group)
 dev.off()
 }
@@ -186,7 +186,7 @@ phmap_ind <- pheatmap::pheatmap(data,
                                 show_colnames = FALSE,
                                 border_color = NA
                                 )
-grDevices::cairo_pdf(file.path("analysis", project, "heatmap", glue::glue("hmap_ind_{label}_{category}.pdf")), width = 14, height = height)
+grDevices::cairo_pdf(file.path("analysis", "relative", "heatmap", glue::glue("hmap_ind_{label}_{category}.pdf")), width = 14, height = height)
 print(phmap_ind)
 dev.off()
 }
@@ -220,7 +220,7 @@ phmap_group <- pheatmap::pheatmap(phmap_data_norm,
         clustering_method = "ward.D2",
         border_color = NA
          )
-grDevices::cairo_pdf(file.path("analysis", project, "heatmap", glue::glue("hmap_{label}_{category}.pdf")), width = 12, height = height)
+grDevices::cairo_pdf(file.path("analysis", "relative", "heatmap", glue::glue("hmap_{label}_{category}.pdf")), width = 12, height = height)
 print(phmap_group)
 dev.off()
 }
@@ -248,7 +248,7 @@ phmap_group <- pheatmap::pheatmap(phmap_data_norm,
         border_color = NA
          )
 
-grDevices::cairo_pdf(file.path("analysis", project, "heatmap", glue::glue("hmap_{label}_cluster.pdf")), width = 10, height = 5)
+grDevices::cairo_pdf(file.path("analysis", "relative", "heatmap", glue::glue("hmap_{label}_cluster.pdf")), width = 10, height = 5)
 print(phmap_group)
 dev.off()
 }
@@ -287,7 +287,7 @@ phmap_group <- pheatmap::pheatmap(phmap_data_norm,
         clustering_method = "ward.D2",
         border_color = NA
          )
-grDevices::cairo_pdf(file.path("analysis", project, "heatmap", glue::glue("hmap_{label}_{category}.pdf")), width = 20, height = height)
+grDevices::cairo_pdf(file.path("analysis", "relative", "heatmap", glue::glue("hmap_{label}_{category}.pdf")), width = 20, height = height)
 print(phmap_group)
 dev.off()
 }
@@ -351,7 +351,7 @@ volPlot <- function(data, cl_interest) {
         )
 
     data_chr <- deparse(substitute(data))
-    ggsave(file.path("analysis", project, "top", glue::glue("volcano_plot_{data_chr}_{cl_interest}.pdf")), width = 6, height = 5)
+    ggsave(file.path("analysis", "relative", "top", glue::glue("volcano_plot_{data_chr}_{cl_interest}.pdf")), width = 6, height = 5)
 }
 
 #wilcox p value, fold change and dotplot
@@ -419,7 +419,7 @@ abundanceCategoryPlot <- function(data, cluster) {
     theme_classic() +
     theme(panel.border = element_rect(color = "black", size = 1, fill = NA)) +
     labs(x = bquote(~-Log[10]~ "qval"), y = "", fill = "TF-IDF", title = cluster)
-  ggsave(file.path("analysis", project, "abundance", paste0("barplot_soupx_", deparse(substitute(data)), "_cluster_", cluster, ".pdf")),
+  ggsave(file.path("analysis", "relative", "abundance", paste0("barplot_soupx_", deparse(substitute(data)), "_cluster_", cluster, ".pdf")),
          width = 6,
          height = height,
          device = cairo_pdf)
@@ -447,7 +447,7 @@ topBarPlot <- function(data, cluster, tfidf_cutoff, qval_cutoff) {
     theme_classic() +
     theme(panel.border = element_rect(color = "black", size = 1, fill = NA)) +
     labs(x = bquote(~-Log[10]~ "qval"), y = "", fill = "TF-IDF", title = paste0("cluster ", cluster))
-  ggsave(file.path("analysis", project, "top", paste0("barplot_soupx_", deparse(substitute(data)), "_cluster_", cluster, ".pdf")),
+  ggsave(file.path("analysis", "relative", "top", paste0("barplot_soupx_", deparse(substitute(data)), "_cluster_", cluster, ".pdf")),
          width = 6,
          height = height,
          device = cairo_pdf)
