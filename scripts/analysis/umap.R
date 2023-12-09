@@ -182,13 +182,6 @@ qs::qsave(combined_umap_full, "final_one_rel_umap_combined.qs")
 combined_umap_full <- qs::qread("final_one_rel_umap_combined.qs")
 
 # neurodegenerative enrichment ------------------------------------------
-neurodegenerative <- 
-  combined_umap_full |>
-  dplyr::filter(cluster %in% c("neurodegenerative1", "neurodegenerative2"))
-
-neurodegenerative |>
-  dplyr::filter(dx_icd_level2 == "dementia")
-
 combined_hd_g_matrix <-
   combined_umap_full |>
   select(hd_g) |>
@@ -207,7 +200,8 @@ abundance_combined_soupx_hdg <-
 # and then manually rename
 abundance_dementia_soupx_hdg <-
   abundance_combined_soupx_hdg |>
-  dplyr::filter(str_detect(gene, "(.*G3[0-2](\\.\\d)?)|(.*F0[1-5](\\.\\d)?)"))
+  dplyr::filter(str_detect(gene, "(.*G3[0-2](\\.\\d)?)|(.*F0[1-5](\\.\\d)?)")) |>
+  dplyr::filter(cluster %in% c("neurodegenerative1", "neurodegenerative2"))
 
 
 dementia_hdg_lookup <-
