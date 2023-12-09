@@ -6,10 +6,25 @@ library(WRS2)
 
 combined_complete <- qread("final_one_rel_combined_complete.qs")
 
-# compare age and sex across somatoform
+# compare age and sex across somatoform ----
 combined_data_ctrl <-
   combined_complete |>
   dplyr::filter(dx_icd_level2 == "somatoform")
+
+dplyr::count(combined_data_ctrl, sex)
+min(combined_data_ctrl$age)
+max(combined_data_ctrl$age)
+
+# age sex histograms ----
+sex_age_histogram <-
+  combined_data_ctrl |>
+  ggplot(aes(x = age, fill = sex)) +
+  geom_histogram(bins = 25) +
+  facet_wrap(vars(sex), scales = "free", ncol = 4) +
+  theme_bw() +
+  theme(legend.position = "none")
+
+ggsave(plot = sex_age_histogram, file.path("analysis", "relative", "correlation", "sex_age_histogram.pdf"), width = 7, height = 5)
 
 vars_cor <-
   combined_complete |>
@@ -238,3 +253,4 @@ combined_ctrl_regress_age |>
   ylab("")
 
 ggsave(file.path("analysis", "relative", "correlation", "stat_sex_regress_bp_igg_ratio.pdf"), width = 2, height = 3)
+
