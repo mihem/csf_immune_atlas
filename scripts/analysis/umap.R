@@ -178,3 +178,57 @@ ggsave(file.path("analysis", "relative", "top", "top_dotplot_umap_combined_quick
 
 # save umap combined ------------------------------------------
 qs::qsave(combined_umap_full, "final_one_rel_umap_combined.qs")
+
+combined_umap_full <- qs::qread("final_one_rel_umap_combined.qs")
+
+# neurodegenerative enrichment ------------------------------------------
+neurodegenerative <- 
+  combined_umap_full |>
+  dplyr::filter(cluster %in% c("neurodegenerative1", "neurodegenerative2"))
+
+neurodegenerative |>
+  dplyr::filter(dx_icd_level2 == "dementia")
+
+combined_hd_g_matrix <-
+  combined_umap_full |>
+  select(hd_g) |>
+  recipes::recipe(hd_g ~ .) |>
+  recipes::step_dummy(hd_g) |>
+  recipes::prep() |>
+  recipes::bake(new_data = NULL) |>
+  as.matrix() |>
+  t()
+
+abundance_combined_soupx_hdg <-
+  SoupX::quickMarkers(combined_hd_g_matrix, combined_umap_full$cluster, FDR = 0.1, N = 100, expressCut = 0.9) |>
+  tibble()
+
+# filter for dementia ICDs
+# and then manually rename
+abundance_dementia_soupx_hdg <-
+  abundance_combined_soupx_hdg |>
+  dplyr::filter(str_detect(gene, "(.*G3[0-2](\\.\\d)?)|(.*F0[1-5](\\.\\d)?)"))
+
+
+dementia_hdg_lookup <-
+  tibble(
+    gene = c("hd_g_G30.1", "hd_g_F03", "hd_g_G31.9"),
+    diagnosis = c("DAT", "dementia_unspecified", "neurodegenrative_unspecified")
+  )
+
+abundance_dementia_soupx_hdg |>
+  left_join(dementia_hdg_lookup) |>
+  dplyr::mutate(qval = -log10(qval)) |>
+  ggplot(aes(x = qval, y = reorder(diagnosis, qval), fill = tfidf)) +
+  geom_col() +
+  viridis::scale_fill_viridis() +
+  theme_classic() +
+  theme(panel.border = element_rect(color = "black", size = 1, fill = NA)) +
+  labs(x = bquote(~ -Log[10] ~ "qval"), y = "", fill = "TF-IDF") +
+  facet_wrap(~cluster)
+
+ggsave(file.path("analysis", "relative", "abundance", "barplot_soupx_hdg_cluster_neurodegenerative.pdf"),
+  width = 9,
+  height = 2,
+  device = cairo_pdf
+)
