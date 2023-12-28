@@ -2,7 +2,7 @@
 library(tidyverse)
 library(qs)
 
-# section read in processed but unfilter  ------------------------------------------
+# section read in processed but unfiltered  ------------------------------------------
 #all_data duplicate (measure date repeated) removed, but multiple measurements of one patients kept
 #all_data_one only one measurement per patient kept
 #patient_id - same for each patient, but blood/CSF

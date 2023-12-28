@@ -39,7 +39,7 @@ ggsave(file.path("analysis", "relative", "time", "time_all.png"), plot = time_pl
 # only somatoform
 combined_complete_time_somatoform <- 
     combined_complete_time |>
-    filter(dx_icd_level2 == "somatoform")
+    dplyr::filter(dx_icd_level2 == "somatoform")
 
 time_plots_somatoform <- lapply(vars_time, TimePlot, data = combined_complete_time_somatoform, size = 0.5, span = 0.5)
 time_plots_somatoform_patch <- patchwork::wrap_plots(time_plots_somatoform, ncol = 4)
