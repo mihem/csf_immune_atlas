@@ -53,14 +53,28 @@ all_data_one_filter_v2 <-
     dplyr::filter(!(event_count < 3000 & tissue == "CSF")) |>
     dplyr::filter(!(event_count < 7000 & tissue == "blood"))
 
+
+csf_data <-
+  all_data_one_filter_v2 |>
+  dplyr::filter(tissue == "CSF") |>
+  select(where(function(x) !all(is.na(x)))) |>
+  dplyr::rename(sex = geschlecht) |>
+  dplyr::mutate(sex = case_when(
+    sex == "W" ~ "f",
+    sex == "M" ~ "m",
+    TRUE ~ NA_character_
+  ))
+
 blood_data <-
-    all_data_one_filter_v2 |>
-    dplyr::filter(tissue == "blood") |>
-    select(where(function(x) !all(is.na(x)))) |>
-    dplyr::rename(sex = geschlecht) |>
-    dplyr::mutate(sex = case_when(sex == "W" ~ "f",
-                                   sex == "M" ~ "m",
-                                    TRUE ~ NA_character_))
+  all_data_one_filter_v2 |>
+  dplyr::filter(tissue == "blood") |>
+  select(where(function(x) !all(is.na(x)))) |>
+  dplyr::rename(sex = geschlecht) |>
+  dplyr::mutate(sex = case_when(
+    sex == "W" ~ "f",
+    sex == "M" ~ "m",
+    TRUE ~ NA_character_
+  ))
 
 all_data_one_fil <- list(csf = csf_data, blood = blood_data)
 qs::qsave(all_data_one_fil, "final_one_rel.qs")
