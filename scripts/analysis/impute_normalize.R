@@ -6,7 +6,7 @@ library(tidyverse)
 library(tidymodels)
 library(bestNormalize)
 library(mice)
-library(skimr)
+library(skimrp)
 library(qs)
 
 # read preprocessed data ---
@@ -51,6 +51,7 @@ csf_data_impute <- mice(
 )
 
 skimr::skim(mice::complete(csf_data_impute, 3))
+skimr::skim(csf_data_impute)
 
 #sanity checks
 csf_data_impute |>
@@ -82,8 +83,8 @@ csf_data |>
     dplyr::summarize(mean = mean(cell_count, na.rm = TRUE))
 
 # all metadata that were not in part1, remove diagnosis (only needed as predictors) except patient_id (required for joining)
-
-csf_data_complete_part1 <- mice::complete(csf_data_impute, 3) |>
+csf_data_complete_part1 <-
+  mice::complete(csf_data_impute, 3) |>
   dplyr::select(all_of(csf_vars_imputed))
 
 csf_data_complete_part2 <- select(csf_data, -all_of(csf_vars_imputed), patient_id)
@@ -135,8 +136,8 @@ blood_data_impute |>
     stripplot(CD8, pch = 19, cex = .5)
 
 # all metadata that were not in part1, but remove diagnosis (only needed as predictors) patient_id required for joining
-
-blood_data_complete_part1 <- mice::complete(blood_data_impute, 3) |>
+blood_data_complete_part1 <-
+  mice::complete(blood_data_impute, 3) |>
   dplyr::select(all_of(blood_vars_imputed))
 
 blood_data_complete_part2 <- select(blood_data, -all_of(blood_vars_imputed), patient_id)
