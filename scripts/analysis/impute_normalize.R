@@ -1,3 +1,5 @@
+# impute data with mice ------------------------------------------
+#impute data using the mice package and pmm method
 
 # load libraries ---
 library(tidyverse)
@@ -7,8 +9,11 @@ library(mice)
 library(skimr)
 library(qs)
 
-# impute data with mice ------------------------------------------
-#impute data using the mice package and pmm method
+# read preprocessed data ---
+all_data_one_fil <- qs::qread("final_one_rel.qs")
+csf_data <- all_data_one_fil$csf
+blood_data <- all_data_one_fil$blood
+
 #csf
 
 csf_data_mice <- select(csf_data, dx_icd_level1:dx_andi_level3, patient_id:lactate, geschlecht, age)
