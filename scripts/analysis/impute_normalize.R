@@ -15,13 +15,24 @@ csf_data <- all_data_one_fil$csf
 blood_data <- all_data_one_fil$blood
 
 #csf
+csf_data_mice <- select(csf_data, dx_icd_level1:dx_andi_level3, patient_id:lactate, sex, age)
 
-csf_data_mice <- select(csf_data, dx_icd_level1:dx_andi_level3, patient_id:lactate, geschlecht, age)
+csf_vars_imputed <- select(csf_data, patient_id:lactate, sex, age) |>
+  names()
 
-skimr::skim(csf_data_mice)
+missing_csf <-
+  csf_data_mice |>
+  select(all_of(csf_vars_imputed)) |>
+  skimr::skim()
+
+missing_csf |>
+  select(skim_type, skim_variable, n_missing, complete_rate) |>
+  write_csv(file.path("analysis", "relative", "qc", "missing_csf.csv"))
+
+
 mice::md.pattern(csf_data_mice)
 
-#better to use complete model (mice guide), beside dx_icd_level2 low correlation
+#better to use complete model (mice guide)
 predictor_matrix_csf <-
   mice::quickpred(csf_data_mice,
                   mincor = 0.1,
@@ -71,8 +82,6 @@ csf_data |>
     dplyr::summarize(mean = mean(cell_count, na.rm = TRUE))
 
 # all metadata that were not in part1, remove diagnosis (only needed as predictors) except patient_id (required for joining)
-csf_vars_imputed <- select(csf_data, patient_id:lactate, geschlecht, age) |>
-  names()
 
 csf_data_complete_part1 <- mice::complete(csf_data_impute, 3) |>
   dplyr::select(all_of(csf_vars_imputed))
@@ -90,10 +99,22 @@ skim(csf_data_complete$B)
 skim(blood_data_complete$B)
 
 #blood
-blood_data_mice <- select(blood_data, dx_icd_level1:dx_andi_level3, patient_id:HLA_DR_T, geschlecht, age)
+blood_data_mice <- select(blood_data, dx_icd_level1:dx_andi_level3, patient_id:HLA_DR_T, sex, age)
 
 skimr::skim(blood_data_mice)
 mice::md.pattern(blood_data_mice)
+
+blood_vars_imputed <- select(blood_data, patient_id:HLA_DR_T, sex, age) |>
+  names()
+
+missing_blood <-
+  blood_data_mice |>
+  select(all_of(blood_vars_imputed)) |>
+  skimr::skim()
+
+missing_blood |>
+  select(skim_type, skim_variable, n_missing, complete_rate) |>
+  write_csv(file.path("analysis", "relative", "qc", "missing_blood.csv"))
 
 predictor_matrix_blood <- mice::quickpred(
   blood_data_mice,
@@ -114,8 +135,6 @@ blood_data_impute |>
     stripplot(CD8, pch = 19, cex = .5)
 
 # all metadata that were not in part1, but remove diagnosis (only needed as predictors) patient_id required for joining
-blood_vars_imputed <- select(blood_data, patient_id:HLA_DR_T, geschlecht, age) |>
-  names()
 
 blood_data_complete_part1 <- mice::complete(blood_data_impute, 3) |>
   dplyr::select(all_of(blood_vars_imputed))
@@ -138,7 +157,6 @@ qs::qsave(all_data_one_complete, "final_one_rel_complete.qs")
 #csf
 #first normalize, very important for UMAP
 #better when leaving out step_normalize, especially visible in individual heatmap
-
 csf_norm_complete_numeric <-
     csf_data_complete |>
     dplyr::select(patient_id, granulos:lactate) |>
