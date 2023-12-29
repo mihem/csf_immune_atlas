@@ -403,7 +403,6 @@ abundanceCategoryPlot <- function(data, cluster) {
   data_plot <-
     data |>
     dplyr::rename(variable = gene) |>
-    dplyr::mutate(variable = gsub(x = variable, pattern = "dx_icd_level2_", replacement = "")) |>
     dplyr::mutate(qval = -log10(qval))|>
     ## dplyr::filter(tfidf > 0.2) |>
     ## dplyr::filter(qval > -log10(0.01)) |>
