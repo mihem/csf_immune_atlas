@@ -408,7 +408,7 @@ abundanceCategoryPlot <- function(data, cluster) {
     ## dplyr::filter(qval > -log10(0.01)) |>
     dplyr::filter(cluster == {{cluster}})
 
-  height <- 1.5 + nrow(data_plot) * 0.05
+  height <- 1.5 + nrow(data_plot) * 0.1
 
   plot <-
     data_plot |>
