@@ -12,6 +12,7 @@ source("scripts/analysis/ml_izkf_utils.R")
 # read in final data for analysis ----
 combined_norm_complete <- qs::qread("final_one_rel_combined_norm_complete.qs")
 
+
 #################################################################################################################
 # notes on dimension reduction overview
 #################################################################################################################
@@ -39,8 +40,7 @@ combined_umap <-
   as_tibble() |>
   rename(UMAP1 = V1, UMAP2 = V2)
 
-
-set.seed(123)
+set.seed(1)
 cl_combined_phenograph <-
   combined_norm_complete |>
   select(granulos_CSF:lactate_CSF) |>
@@ -49,11 +49,11 @@ cl_combined_phenograph <-
 
 lookup_cluster <-
   tibble(
-    value = c(1, 2, 3, 4, 5, 6, 7),
-    cluster_name = c("healthy CSF", "neuropathy", "inflammatory", "neurodegenerative1", "neurodegenerative2", "infectious", "optic neuritis")
+    value = c(1, 2, 3, 4, 5, 6),
+    cluster_name = c("healthy CSF", "neurodegenerative2", "inflammatory", "neurodegenerative1", "infectious", "neuropathy")
   )
 
-cluster_levels <- c("inflammatory", "healthy CSF", "neuropathy", "infectious", "optic neuritis", "neurodegenerative1", "neurodegenerative2")
+cluster_levels <- c("inflammatory", "healthy CSF", "neuropathy", "infectious", "neurodegenerative1", "neurodegenerative2")
 
 combined_phenograph <-
   cl_combined_phenograph$community$membership |>
@@ -128,8 +128,10 @@ lapply(lookup_cluster$cluster_name, abundanceCategoryPlot, data = abundance_comb
 combined_matrix <-
     combined_umap_full |>
     select(granulos_CSF:lactate_CSF) |>
+    select(-OCB_CSF) |>
     as.matrix() |>
     t()
+
 
 # quickmarkers_combined_var <- SoupX::quickMarkers(combined_matrix, combined_umap_full$cluster, FDR = 0.1, N = 100, expressCut = 0.9) |>
 #     tibble()
@@ -203,12 +205,12 @@ abundance_dementia_soupx_hdg <-
   dplyr::filter(str_detect(gene, "(.*G3[0-2](\\.\\d)?)|(.*F0[1-5](\\.\\d)?)")) |>
   dplyr::filter(cluster %in% c("neurodegenerative1", "neurodegenerative2"))
 
-
 dementia_hdg_lookup <-
   tibble(
-    gene = c("hd_g_G30.1", "hd_g_F03", "hd_g_G31.9"),
-    diagnosis = c("DAT", "dementia_unspecified", "neurodegenrative_unspecified")
+    gene = c("hd_g_G30.1", "hd_g_F03", "hd_g_G31.9", "hd_g_F01.3", "hd_g_G31.82"),
+    diagnosis = c("DAT", "dementia_unspecified", "neurodegenerative_unspecified", "VaD", "LBD")
   )
+
 
 abundance_dementia_soupx_hdg |>
   left_join(dementia_hdg_lookup) |>
