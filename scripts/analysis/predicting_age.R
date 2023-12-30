@@ -1,3 +1,6 @@
+# predict age using machine learning
+
+# read libraries ----
 library(tidyverse)
 library(datawizard)
 library(qs)
@@ -9,20 +12,21 @@ library(Polychrome)
 set.seed(123)
 my_cols <- unname(Polychrome::createPalette(100, RColorBrewer::brewer.pal(8, "Set2")))
 
-# predicting sex ----
-## preparing data ----
-combined_complete <- qread("final_one_rel_combined_complete.qs")
+combined <- qread("final_one_rel_combined.qs")
 
-length(unique(combined_complete$dx_icd_level1))
-length(unique(combined_complete$dx_icd_level2))
-
+# remove if many columns are missing
+combined_fil <-
+  combined |>
+  mutate(na_count_imp = rowSums(is.na(pick(sex:lactate_CSF)))) |>
+  dplyr::filter(na_count_imp < 20)
+  
 vars_sel <-
-  combined_complete |>
+  combined_fil |>
   select(granulos_CSF:lactate_CSF) |>
   names()
 
 combined_data_ctrl <-
-  combined_complete |>
+  combined_fil |>
   dplyr::filter(dx_icd_level2 == "somatoform")
 
 combined_ctrl_regress_sex <-
@@ -30,10 +34,7 @@ combined_ctrl_regress_sex <-
   drop_na(dx_icd_level2) |>
   datawizard::adjust(effect = c("sex"), select = vars_sel, keep_intercept = TRUE) |>
   tibble() |>
-  select(age, all_of(vars_sel))
-
-mean(combined_ctrl_regress_sex$age)
-sd(combined_ctrl_regress_sex$age)
+  select(age, all_of(vars_sel)) 
 
 set.seed(1234)
 splits <- initial_split(combined_ctrl_regress_sex, prop = 0.75, strata = age)
@@ -46,48 +47,56 @@ mean(train_data$age)
 mean(test_data$age)
 
 #build the model
-rf_model <-
-  rand_forest(mtry = tune(), min_n = tune(), trees = 3000) |>
-  set_mode("regression") |>
-  set_engine("ranger")
+xgb_model <- 
+  boost_tree(
+    trees = 1000,
+    tree_depth = tune(),
+    min_n = tune(),
+    loss_reduction = tune(),
+    sample_size = tune(),
+    mtry = tune(),
+    learn_rate = tune()
+  ) |>
+  set_engine("xgboost") |>
+  set_mode("regression")
 
 # recipe for tidymodels  
 data_recipe <-
   train_data |>
-  recipe(age ~ .)
+  recipe(age ~ .) |>
+  recipes::step_impute_knn(
+    all_predictors(),
+    neighbors = 5,
+    options = list(nthread = 6)
+  )
 
 # repeated cross validation ------------------------------------------
 set.seed(1234)
-folds <- vfold_cv(train_data, v = 10, strata = age, repeats = 1)
+folds <- vfold_cv(train_data, v = 10, strata = age, repeats = 10)
 
 library(doMC)
-registerDoMC(cores = 8)
+registerDoMC(cores = 6)
 
 set.seed(1234)
-rf_workflow <-
+xgb_workflow <-
   workflow() |>
-  add_model(rf_model) |>
+  add_model(xgb_model) |>
   add_recipe(data_recipe)
 
-rf_workflow$pre$actions$recipe$recipe$var_info$variable
-
-#train and tune rf
+#train and tune xgb
 set.seed(1234)
 system.time(
   res_model <-
-    rf_workflow |>
+    xgb_workflow |>
     tune_grid(
       resamples = folds,
-      grid = 10,
+      grid = 50,
       control = control_grid(save_pred = TRUE),
-      metrics = metric_set(rmse, rsq, mae))
+      metrics = metric_set(rmse, rsq))
 )
-
-stopCluster(cl)
 
 autoplot(res_model, metric = "rmse")
 autoplot(res_model, metric = "rsq")
-autoplot(res_model, metric = "mae")
 
 collect_metrics(res_model) |>
   dplyr::filter(.metric == "rmse") |>
@@ -97,33 +106,24 @@ collect_metrics(res_model) |>
   geom_point()
 
 show_best(res_model, "rmse")
+show_best(res_model, "rsq")
 
-rf_best <-
+xgb_best <-
   res_model |>
   select_best("rmse")
+  # select_best("rsq")
 
-saveRDS(res_model, file.path("analysis", "relative", "models", "age_combined_rf_model.rds"))
+qs::qsave(res_model, file.path("analysis", "relative", "models", "age_combined_xgb_model.qs"))
 
 # build last model 
-
-#necessary to specify the model again to include the importance
-last_rf_model <-
-  rand_forest(mtry = rf_best$mtry, min_n = rf_best$min_n, trees = 3000) |>
-  set_mode("regression") |>
-  set_engine("ranger", importance = "impurity")
-
-# the last workflow
-last_rf_workflow <-
-  rf_workflow |>
-  update_model(last_rf_model)
+final_xgb <- finalize_workflow(xgb_workflow, xgb_best)
 
 #fit best model to train data and evaluate on test data
 set.seed(1234)
-
-last_fit <-
-  last_rf_workflow |>
+last_fit <- 
+  final_xgb |>
   last_fit(splits,
-    metrics = metric_set(rmse, rsq, mae)
+    metrics = metric_set(rmse, rsq)
   )
 
 final_metric <- collect_metrics(last_fit)
@@ -131,19 +131,18 @@ final_metric <- collect_metrics(last_fit)
 last_fit |>
   tune::collect_predictions() |>
   ggplot(aes(x = age, y = .pred)) +
-  geom_point(alpha = .3, size = 1) +
+  geom_point(alpha = .5, size = .5) +
   geom_abline(color = "red") +
   coord_obs_pred() +
-  ylab("Predicted age") +
-  xlab("True age") +
-  ggplot2::ggtitle(glue::glue("RMSE: {signif(final_metric$.estimate,2)[1]}, RSQ: {signif(final_metric$.estimate,2)[2]}")) +
+  ylab("predicted age") +
+  xlab("true age") +
+  labs(subtitle = glue::glue("RMSE: {signif(final_metric$.estimate,2)[1]}, RSQ: {signif(final_metric$.estimate,2)[2]}")) +
   theme_bw()
 
-ggsave(file.path("analysis", "relative", "models", "age_combined_rf_final_model.pdf"), width = 3, height = 3)
+ggsave(file.path("analysis", "relative", "models", "age_combined_xgb_final_model.pdf"), width = 3, height = 3)
 
-
-#rf models
-saveRDS(last_fit, file.path("analysis", "relative", "models", "age_combinded_rf_final_model.rds"))
+#save model
+qs::qsave(last_fit, file.path("analysis", "relative", "models", "age_combinded_xgb_final_model.qs"))
 
 #vip with auc train/test
 last_fit |>
@@ -158,7 +157,7 @@ last_fit |>
   geom_segment(aes(xend = 0, yend = Variable), color = my_cols[2])+
   theme_bw()+
   ylab(NULL)+
-  xlab("Predictor importance") +
+  xlab("predictor importance") +
   theme(legend.position = "none")
 
-ggsave(file.path("analysis", "relative", "models", "age_combined_rf_vip.pdf"), width = 3, height = 2)
+ggsave(file.path("analysis", "relative", "models", "age_combined_xgb_vip.pdf"), width = 4, height = 2)
