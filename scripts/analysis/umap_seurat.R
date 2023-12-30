@@ -112,16 +112,6 @@ abundance_combined_soupx <-
 
 lapply(unique(seu$cluster), abundanceCategoryPlot, data = abundance_combined_soupx)
 
-Seurat::FeaturePlot(seu, features = c("granulos-CSF", "plasma-CSF"))
-Seurat::FeaturePlot(seu, features = c("OCB-CSF"))
-Seurat::FindMarkers(seu, ident)
-Seurat::FindMarkers(seu, ident.1 = "0")
-Seurat::FindMarkers(seu, ident.1 = "1")
-Seurat::FindMarkers(seu, ident.1 = "2")
-Seurat::FindMarkers(seu, ident.1 = "6")
-Seurat::FindMarkers(seu, ident.1 = "6")
-
-
 seu_markers <-
     Seurat::FindAllMarkers(seu, only.pos = TRUE) |>
     rownames_to_column("var") |>
