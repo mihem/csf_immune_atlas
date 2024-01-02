@@ -145,7 +145,6 @@ final_metric <- collect_metrics(last_fit)
 
 # qs::qsave(last_fit, file.path("analysis", "relative", "models", "dementia_somatoform_xgb_combined_final.qs"))
 # qs::qsave(last_fit, file.path("analysis", "relative", "models", "dementia_somatoform_xgb_basic_final.qs"))
-last_fit <- qs::qread(file.path("analysis", "relative", "models", "ms_somatoform_xgb_basic_final.qs"))
 
 # function to plot confusion matrix  not normalized ----
 plotConfMat <- function(last_fit, name) {
