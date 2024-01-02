@@ -41,61 +41,6 @@ data_tidymodels_dementia <-
     mutate(dx_icd_level2 = factor(dx_icd_level2, levels = c("somatoform", "dementia"))) |>
     dplyr::select(dx_icd_level2, granulos_CSF:lactate_CSF)
 
-data_tidymodels_combined <-
-    combined_fil |>
-    dplyr::filter(dx_icd_level2 %in% c("Parkinson’s syndrome", "dementia")) |>
-    mutate(dx_icd_level2 = if_else(dx_icd_level2 == "Parkinson’s syndrome", "Parkinson", "dementia")) |>
-    mutate(dx_icd_level2 = factor(dx_icd_level2, levels = c("dementia", "Parkinson"))) |>
-    dplyr::select(dx_icd_level2, granulos_CSF:lactate_CSF)
-
-data_tidymodels_combined <-
-    combined_fil |>
-    dplyr::filter(dx_icd_level2 %in% c("transient ischemic attack", "ischemic stroke")) |>
-    mutate(dx_icd_level2 = if_else(dx_icd_level2 == "transient ischemic attack", "TIA", "ischemic_stroke")) |>
-    mutate(dx_icd_level2 = factor(dx_icd_level2, levels = c("TIA", "ischemic_stroke"))) |>
-    dplyr::select(dx_icd_level2, granulos_CSF:lactate_CSF)
-
-data_tidymodels_combined <-
-    combined_fil |>
-    dplyr::filter(dx_icd_level2 %in% c("other polyneuropathy", "vasculitic neuropathy")) |>
-    mutate(dx_icd_level2 = if_else(dx_icd_level2 == "other polyneuropathy", "other_PNP", "VN")) |>
-    mutate(dx_icd_level2 = factor(dx_icd_level2, levels = c("other_PNP", "VN"))) |>
-    dplyr::select(dx_icd_level2, granulos_CSF:lactate_CSF)
-
-data_tidymodels_combined <-
-    combined_fil |>
-    dplyr::filter(dx_icd_level2 %in% c("inflammatory demyelinating neuropathy", "vasculitic neuropathy")) |>
-    mutate(dx_icd_level2 = if_else(dx_icd_level2 == "inflammatory neuropathy", "INP", "VN")) |>
-    mutate(dx_icd_level2 = factor(dx_icd_level2, levels = c("other_PNP", "VN"))) |>
-    dplyr::select(dx_icd_level2, granulos_CSF:lactate_CSF)
-
-data_tidymodels_combined <-
-    combined_fil |>
-    dplyr::filter(dx_icd_level2 %in% c("dementia", "mild cognitive impairment")) |>
-    mutate(dx_icd_level2 = if_else(dx_icd_level2 == "mild cognitive impairment", "MCI", "dementia")) |>
-    mutate(dx_icd_level2 = factor(dx_icd_level2, levels = c("MCI", "dementia"))) |>
-    dplyr::select(dx_icd_level2, granulos_CSF:lactate_CSF)
-
-data_tidymodels_combined <-
-    combined_fil |>
-    dplyr::filter(dx_icd_level2 %in% c("somatoform", "vasculitic neuropathy")) |>
-    mutate(dx_icd_level2 = if_else(dx_icd_level2 == "vasculitic neuropathy", "VN", "somatoform")) |>
-    mutate(dx_icd_level2 = factor(dx_icd_level2, levels = c("somatoform", "VN"))) |>
-    dplyr::select(dx_icd_level2, granulos_CSF:lactate_CSF)
-
-data_tidymodels_combined <-
-    combined_fil |>
-    dplyr::filter(dx_icd_level2 %in% c("somatoform", "ischemic stroke")) |>
-    mutate(dx_icd_level2 = if_else(dx_icd_level2 == "ischemic stroke", "ischemic_stroke", "somatoform")) |>
-    mutate(dx_icd_level2 = factor(dx_icd_level2, levels = c("somatoform", "ischemic_stroke"))) |>
-    dplyr::select(dx_icd_level2, granulos_CSF:lactate_CSF)
-
-data_tidymodels_combined <-
-    combined_fil |>
-    dplyr::filter(dx_icd_level2 %in% c("opticus neuritis", "multiple sclerosis")) |>
-    mutate(dx_icd_level2 = if_else(dx_icd_level2 == "opticus neuritis", "ON", "MS")) |>
-    mutate(dx_icd_level2 = factor(dx_icd_level2, levels = c("ON", "MS"))) |>
-    dplyr::select(dx_icd_level2, granulos_CSF:lactate_CSF)
 
 # only basic ----
 data_tidymodels_basic <-
@@ -110,14 +55,6 @@ test_data <- testing(splits)
 
 
 #check if balances are the same -----
-# train_data |>
-#     count(dx_icd_level1) |>
-#     mutate(prop = n / sum(n))
-
-# test_data |>
-#     count(dx_icd_level1) |>
-#     mutate(prop = n / sum(n))
-
 train_data |>
     count(dx_icd_level2) |>
     mutate(prop = n / sum(n))
@@ -127,11 +64,6 @@ test_data |>
     mutate(prop = n / sum(n))
 
 #build the model ----
-# rf_model <-
-#   rand_forest(mtry = tune(), min_n = tune(), trees = 3000) |>
-#   set_mode("classification") |>
-#   set_engine("ranger")
-
 xgb_model <- 
   boost_tree(
     trees = 1000,
@@ -190,11 +122,11 @@ xgb_best <-
   select_best("roc_auc")
   # select_best("bal_accuracy")
 
-qs::qsave(res_model, file.path("analysis", "relative", "models", "ms_somatoform_xgb_combined.qs"))
-qs::qsave(res_model, file.path("analysis", "relative", "models", "ms_somatoform_xgb_basic.qs"))
+# qs::qsave(res_model, file.path("analysis", "relative", "models", "ms_somatoform_xgb_combined.qs"))
+# qs::qsave(res_model, file.path("analysis", "relative", "models", "ms_somatoform_xgb_basic.qs"))
 
-qs::qsave(res_model, file.path("analysis", "relative", "models", "dementia_somatoform_xgb_combined.qs"))
-qs::qsave(res_model, file.path("analysis", "relative", "models", "dementia_somatoform_xgb_basic.qs"))
+# qs::qsave(res_model, file.path("analysis", "relative", "models", "dementia_somatoform_xgb_combined.qs"))
+# qs::qsave(res_model, file.path("analysis", "relative", "models", "dementia_somatoform_xgb_basic.qs"))
 
 # build last model ----
 final_xgb <- finalize_workflow(xgb_workflow, xgb_best)
@@ -209,11 +141,11 @@ last_fit <-
 
 final_metric <- collect_metrics(last_fit)
 
-qs::qsave(last_fit, file.path("analysis", "relative", "models", "ms_somatoform_xgb_combined_final.qs"))
-qs::qsave(last_fit, file.path("analysis", "relative", "models", "ms_somatoform_xgb_basic_final.qs"))
+# qs::qsave(last_fit, file.path("analysis", "relative", "models", "ms_somatoform_xgb_combined_final.qs"))
+# qs::qsave(last_fit, file.path("analysis", "relative", "models", "ms_somatoform_xgb_basic_final.qs"))
 
-qs::qsave(last_fit, file.path("analysis", "relative", "models", "dementia_somatoform_xgb_combined_final.qs"))
-qs::qsave(last_fit, file.path("analysis", "relative", "models", "dementia_somatoform_xgb_basic_final.qs"))
+# qs::qsave(last_fit, file.path("analysis", "relative", "models", "dementia_somatoform_xgb_combined_final.qs"))
+# qs::qsave(last_fit, file.path("analysis", "relative", "models", "dementia_somatoform_xgb_basic_final.qs"))
 
 # function to plot confusion matrix  not normalized ----
 plotConfMat <- function(last_fit, name) {
@@ -230,26 +162,11 @@ plotConfMat <- function(last_fit, name) {
   ggsave(file.path("analysis", "relative", "models", glue::glue("{name}_xgb_conf_mat.pdf")), width = 5, height = 5)
 }
 
-plotConfMat(last_fit, "ms_somatoform_combined")
-plotConfMat(last_fit, "ms_somatoform_basic")
+# plotConfMat(last_fit, "ms_somatoform_combined")
+# plotConfMat(last_fit, "ms_somatoform_basic")
 
-plotConfMat(last_fit, "dementia_somatoform_combined")
-plotConfMat(last_fit, "dementia_somatoform_basic")
-
-plotConfMat(last_fit, "dementia_parkinson_combined")
-plotConfMat(last_fit, "tia_ischemic_stroke_combined")
-
-plotConfMat(last_fit, "otherpnp_VN_combined")
-plotConfMat(last_fit, "dementia_MCI_combined")
-
-plotConfMat(last_fit, "somatoform_VN_combined")
-
-plotConfMat(last_fit, "somatoform_ischemic_stroke_combined")
-plotConfMat(last_fit, "somatoform_ischemic_stroke_basic")
-
-plotConfMat(last_fit, "MS_ON_combined")
-plotConfMat(last_fit, "MS_ON_basic")
-
+# plotConfMat(last_fit, "dementia_somatoform_combined")
+# plotConfMat(last_fit, "dementia_somatoform_basic")
 
 #vip with auc train/test ----
 last_fit |>
@@ -267,17 +184,17 @@ last_fit |>
   xlab("Predictor importance") +
   theme(legend.position = "none")
 
-ggsave(file.path("analysis", "relative", "models", "ms_somatoform_xgb_combined_vip.pdf"), width = 3, height = 2)
-ggsave(file.path("analysis", "relative", "models", "ms_somatoform_xgb_basic_vip.pdf"), width = 3, height = 2)
+# ggsave(file.path("analysis", "relative", "models", "ms_somatoform_xgb_combined_vip.pdf"), width = 3, height = 2)
+# ggsave(file.path("analysis", "relative", "models", "ms_somatoform_xgb_basic_vip.pdf"), width = 3, height = 2)
 
-ggsave(file.path("analysis", "relative", "models", "dementia_somatoform_xgb_combined_vip.pdf"), width = 3, height = 2)
-ggsave(file.path("analysis", "relative", "models", "dementia_somatoform_xgb_combined_vip.pdf"), width = 3, height = 2)
+# ggsave(file.path("analysis", "relative", "models", "dementia_somatoform_xgb_combined_vip.pdf"), width = 3, height = 2)
+# ggsave(file.path("analysis", "relative", "models", "dementia_somatoform_xgb_combined_vip.pdf"), width = 3, height = 2)
 
-last_fit_combined <- qs::qread(file.path("analysis", "relative", "models", "ms_somatoform_xgb_combined_final.qs"))
-last_fit_basic <- qs::qread(file.path("analysis", "relative", "models", "ms_somatoform_xgb_basic_final.qs"))
+# last_fit_combined <- qs::qread(file.path("analysis", "relative", "models", "ms_somatoform_xgb_combined_final.qs"))
+# last_fit_basic <- qs::qread(file.path("analysis", "relative", "models", "ms_somatoform_xgb_basic_final.qs"))
 
-last_fit_combined <- qs::qread(file.path("analysis", "relative", "models", "dementia_somatoform_xgb_combined_final.qs"))
-last_fit_basic <- qs::qread(file.path("analysis", "relative", "models", "dementia_somatoform_xgb_basic_final.qs"))
+# last_fit_combined <- qs::qread(file.path("analysis", "relative", "models", "dementia_somatoform_xgb_combined_final.qs"))
+# last_fit_basic <- qs::qread(file.path("analysis", "relative", "models", "dementia_somatoform_xgb_basic_final.qs"))
 
 # roc curves ---- 
 roc_combined <- 
@@ -322,12 +239,12 @@ roc_curve <-
     size = 2.5
   )
 
-ggsave(
-  plot = roc_curve,
-  file.path("analysis", "relative", "models", "ms_somatoform_xgb_roc.pdf"), width = 4, height = 4
-)
+# ggsave(
+#   plot = roc_curve,
+#   file.path("analysis", "relative", "models", "ms_somatoform_xgb_roc.pdf"), width = 4, height = 4
+# )
 
-ggsave(
-  plot = roc_curve,
-  file.path("analysis", "relative", "models", "dementia_somatoform_xgb_roc.pdf"), width = 4, height = 4
-)
+# ggsave(
+#   plot = roc_curve,
+#   file.path("analysis", "relative", "models", "dementia_somatoform_xgb_roc.pdf"), width = 4, height = 4
+# )
