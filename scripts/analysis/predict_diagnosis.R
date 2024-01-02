@@ -28,18 +28,18 @@ dplyr::count(combined_fil, dx_icd_level2, sort = TRUE) |>
 # dplyr::count(combined, dx_icd_level1)
 
 # all combined ----
-data_tidymodels_ms <-
+data_tidymodels_combined <-
     combined_fil |>
     dplyr::filter(dx_icd_level2 %in% c("somatoform", "multiple sclerosis")) |>
     mutate(dx_icd_level2 = if_else(dx_icd_level2 == "multiple sclerosis", "MS", "somatoform")) |>
     mutate(dx_icd_level2 = factor(dx_icd_level2, levels = c("somatoform", "MS"))) |>
     dplyr::select(dx_icd_level2, granulos_CSF:lactate_CSF)
 
-data_tidymodels_dementia <-
-    combined_fil |>
-    dplyr::filter(dx_icd_level2 %in% c("somatoform", "dementia")) |>
-    mutate(dx_icd_level2 = factor(dx_icd_level2, levels = c("somatoform", "dementia"))) |>
-    dplyr::select(dx_icd_level2, granulos_CSF:lactate_CSF)
+# data_tidymodels_combined <-
+#     combined_fil |>
+#     dplyr::filter(dx_icd_level2 %in% c("somatoform", "dementia")) |>
+#     mutate(dx_icd_level2 = factor(dx_icd_level2, levels = c("somatoform", "dementia"))) |>
+#     dplyr::select(dx_icd_level2, granulos_CSF:lactate_CSF)
 
 
 # only basic ----
@@ -48,8 +48,8 @@ data_tidymodels_basic <-
     dplyr::select(dx_icd_level2, lymphos_basic_CSF:lactate_CSF)
 
 set.seed(1234)
-# splits <- initial_split(data_tidymodels_combined, prop = 0.75, strata = dx_icd_level2)
-splits <- initial_split(data_tidymodels_basic, prop = 0.75, strata = dx_icd_level2)
+splits <- initial_split(data_tidymodels_combined, prop = 0.75, strata = dx_icd_level2)
+# splits <- initial_split(data_tidymodels_basic, prop = 0.75, strata = dx_icd_level2)
 train_data <- training(splits)
 test_data <- testing(splits)
 
@@ -88,8 +88,7 @@ data_recipe <-
 
 # repeated cross validation ----
 set.seed(1234)
-folds <- vfold_cv(train_data, v = 10, strata = dx_icd_level2, repeats = 1)
-# folds <- vfold_cv(train_data, v = 10, strata = dx_icd_level2, repeats = 10)
+folds <- vfold_cv(train_data, v = 10, strata = dx_icd_level2, repeats = 10)
 
 registerDoMC(cores = 6)
 
