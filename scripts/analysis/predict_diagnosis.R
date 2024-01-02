@@ -3,222 +3,253 @@ library(tidyverse)
 library(tidymodels)
 library(finetune)
 library(Polychrome)
+library(doMC)
 options(tidymodels.dark = TRUE)
 
 # tidymodels  ------------------------------------------
-#comments
-# random forest a little better than elastic net
-# more trees in random forest (from 1000 to 3000) improves performance
-# tuning random forest (mtry and min_n) does not significantly improve performance
-# xgboost not significantly better than random forest and takes much longer
-# biobanklist_dx no better than dx_icd and fewer observations
-# up/downsampling does not improve performance
-# different normalization (bestNormalize) does not improve the performance
+# combined_complete <- qread("final_one_rel_combined_complete.qs")
+combined <- qread("final_one_rel_combined.qs")
 
-combined_complete <- qread("final_one_rel_combined_complete.qs")
-
+set.seed(123)
 my_cols <- unname(createPalette(100, RColorBrewer::brewer.pal(8, "Set2")))
 
+# remove if many columns are missing
+combined_fil <-
+  combined |>
+  mutate(na_count_imp = rowSums(is.na(pick(sex:lactate_CSF)))) |>
+  dplyr::filter(na_count_imp < 20)
+
+dplyr::count(combined_fil, dx_icd_level2, sort = TRUE) |>
+  print(n = 25)
+
 # tidymodels for level 1 ----
-sel_icd_level1 <- c("autoimmune", "neurodegenerative", "psychogenic", "infectious")
+# sel_icd_level1 <- c("autoimmune", "neurodegenerative", "psychogenic", "infectious")
+
+# dplyr::count(combined, dx_icd_level1)
 
 # all combined ----
-data_combined_tidymodels_level1 <-
-    combined_complete |>
-    dplyr::filter(dx_icd_level1 %in% sel_icd_level1) |>
-    dplyr::mutate(dx_icd_level1 = factor(dx_icd_level1)) |>
-    dplyr::select(dx_icd_level1, granulos_CSF:lactate_CSF)
+data_tidymodels_ms <-
+    combined_fil |>
+    dplyr::filter(dx_icd_level2 %in% c("somatoform", "multiple sclerosis")) |>
+    mutate(dx_icd_level2 = if_else(dx_icd_level2 == "multiple sclerosis", "MS", "somatoform")) |>
+    mutate(dx_icd_level2 = factor(dx_icd_level2, levels = c("somatoform", "MS"))) |>
+    dplyr::select(dx_icd_level2, granulos_CSF:lactate_CSF)
 
-dplyr::count(data_combined_tidymodels_level1, dx_icd_level1)
+data_tidymodels_dementia <-
+    combined_fil |>
+    dplyr::filter(dx_icd_level2 %in% c("somatoform", "dementia")) |>
+    mutate(dx_icd_level2 = factor(dx_icd_level2, levels = c("somatoform", "dementia"))) |>
+    dplyr::select(dx_icd_level2, granulos_CSF:lactate_CSF)
 
-# only blood flow ----
-data_blood_tidymodels_level1 <-
-    data_combined_tidymodels_level1 |>
-    dplyr::select(dx_icd_level1, contains("blood"))
+data_tidymodels_combined <-
+    combined_fil |>
+    dplyr::filter(dx_icd_level2 %in% c("Parkinson’s syndrome", "dementia")) |>
+    mutate(dx_icd_level2 = if_else(dx_icd_level2 == "Parkinson’s syndrome", "Parkinson", "dementia")) |>
+    mutate(dx_icd_level2 = factor(dx_icd_level2, levels = c("dementia", "Parkinson"))) |>
+    dplyr::select(dx_icd_level2, granulos_CSF:lactate_CSF)
 
-# only CSF flow ----
-data_csf_tidymodels_level1 <-
-    data_combined_tidymodels_level1 |>
-    dplyr::select(dx_icd_level1, granulos_CSF:HLA_DR_T_blood) |>
-    dplyr::select(dx_icd_level1, contains("CSF"))
+data_tidymodels_combined <-
+    combined_fil |>
+    dplyr::filter(dx_icd_level2 %in% c("transient ischemic attack", "ischemic stroke")) |>
+    mutate(dx_icd_level2 = if_else(dx_icd_level2 == "transient ischemic attack", "TIA", "ischemic_stroke")) |>
+    mutate(dx_icd_level2 = factor(dx_icd_level2, levels = c("TIA", "ischemic_stroke"))) |>
+    dplyr::select(dx_icd_level2, granulos_CSF:lactate_CSF)
+
+data_tidymodels_combined <-
+    combined_fil |>
+    dplyr::filter(dx_icd_level2 %in% c("other polyneuropathy", "vasculitic neuropathy")) |>
+    mutate(dx_icd_level2 = if_else(dx_icd_level2 == "other polyneuropathy", "other_PNP", "VN")) |>
+    mutate(dx_icd_level2 = factor(dx_icd_level2, levels = c("other_PNP", "VN"))) |>
+    dplyr::select(dx_icd_level2, granulos_CSF:lactate_CSF)
+
+data_tidymodels_combined <-
+    combined_fil |>
+    dplyr::filter(dx_icd_level2 %in% c("inflammatory demyelinating neuropathy", "vasculitic neuropathy")) |>
+    mutate(dx_icd_level2 = if_else(dx_icd_level2 == "inflammatory neuropathy", "INP", "VN")) |>
+    mutate(dx_icd_level2 = factor(dx_icd_level2, levels = c("other_PNP", "VN"))) |>
+    dplyr::select(dx_icd_level2, granulos_CSF:lactate_CSF)
+
+data_tidymodels_combined <-
+    combined_fil |>
+    dplyr::filter(dx_icd_level2 %in% c("dementia", "mild cognitive impairment")) |>
+    mutate(dx_icd_level2 = if_else(dx_icd_level2 == "mild cognitive impairment", "MCI", "dementia")) |>
+    mutate(dx_icd_level2 = factor(dx_icd_level2, levels = c("MCI", "dementia"))) |>
+    dplyr::select(dx_icd_level2, granulos_CSF:lactate_CSF)
+
+data_tidymodels_combined <-
+    combined_fil |>
+    dplyr::filter(dx_icd_level2 %in% c("somatoform", "vasculitic neuropathy")) |>
+    mutate(dx_icd_level2 = if_else(dx_icd_level2 == "vasculitic neuropathy", "VN", "somatoform")) |>
+    mutate(dx_icd_level2 = factor(dx_icd_level2, levels = c("somatoform", "VN"))) |>
+    dplyr::select(dx_icd_level2, granulos_CSF:lactate_CSF)
+
+data_tidymodels_combined <-
+    combined_fil |>
+    dplyr::filter(dx_icd_level2 %in% c("somatoform", "ischemic stroke")) |>
+    mutate(dx_icd_level2 = if_else(dx_icd_level2 == "ischemic stroke", "ischemic_stroke", "somatoform")) |>
+    mutate(dx_icd_level2 = factor(dx_icd_level2, levels = c("somatoform", "ischemic_stroke"))) |>
+    dplyr::select(dx_icd_level2, granulos_CSF:lactate_CSF)
+
+data_tidymodels_combined <-
+    combined_fil |>
+    dplyr::filter(dx_icd_level2 %in% c("opticus neuritis", "multiple sclerosis")) |>
+    mutate(dx_icd_level2 = if_else(dx_icd_level2 == "opticus neuritis", "ON", "MS")) |>
+    mutate(dx_icd_level2 = factor(dx_icd_level2, levels = c("ON", "MS"))) |>
+    dplyr::select(dx_icd_level2, granulos_CSF:lactate_CSF)
 
 # only basic ----
-data_basic_tidymodels_level1 <-
-    data_combined_tidymodels_level1 |>
-    dplyr::select(dx_icd_level1, lymphos_basic_CSF:lactate_CSF)
-
-# sanity check -----
-all.equal(
-    ncol(data_combined_tidymodels_level1),
-    ncol(data_blood_tidymodels_level1) + ncol(data_csf_tidymodels_level1) - 1 + ncol(data_basic_tidymodels_level1) - 1
-)
+data_tidymodels_basic <-
+    data_tidymodels_combined |>
+    dplyr::select(dx_icd_level2, lymphos_basic_CSF:lactate_CSF)
 
 set.seed(1234)
-# splits <- initial_split(data_blood_tidymodels_level1, prop = 0.75, strata = dx_icd_level1)
-# splits <- initial_split(data_csf_tidymodels_level1, prop = 0.75, strata = dx_icd_level1)
-# splits <- initial_split(data_basic_tidymodels_level1, prop = 0.75, strata = dx_icd_level1)
-splits <- initial_split(data_combined_tidymodels_level1, prop = 0.75, strata = dx_icd_level1)
-
+# splits <- initial_split(data_tidymodels_combined, prop = 0.75, strata = dx_icd_level2)
+splits <- initial_split(data_tidymodels_basic, prop = 0.75, strata = dx_icd_level2)
 train_data <- training(splits)
 test_data <- testing(splits)
 
 
 #check if balances are the same -----
+# train_data |>
+#     count(dx_icd_level1) |>
+#     mutate(prop = n / sum(n))
+
+# test_data |>
+#     count(dx_icd_level1) |>
+#     mutate(prop = n / sum(n))
+
 train_data |>
-    count(dx_icd_level1) |>
+    count(dx_icd_level2) |>
     mutate(prop = n / sum(n))
 
 test_data |>
-    count(dx_icd_level1) |>
+    count(dx_icd_level2) |>
     mutate(prop = n / sum(n))
 
 #build the model ----
-rf_model <-
-  rand_forest(mtry = tune(), min_n = tune(), trees = 3000) |>
-  set_mode("classification") |>
-  set_engine("ranger")
+# rf_model <-
+#   rand_forest(mtry = tune(), min_n = tune(), trees = 3000) |>
+#   set_mode("classification") |>
+#   set_engine("ranger")
+
+xgb_model <- 
+  boost_tree(
+    trees = 1000,
+    tree_depth = tune(),
+    min_n = tune(),
+    loss_reduction = tune(),
+    sample_size = tune(),
+    mtry = tune(),
+    learn_rate = tune()
+  ) |>
+  set_engine("xgboost") |>
+  set_mode("classification")
 
 # recipe for tidymodels ----
 data_recipe <-
   train_data |>
-  recipe(dx_icd_level1 ~ .)
+  recipe(dx_icd_level2 ~ .) |>
+  recipes::step_impute_knn(
+    all_predictors(),
+    neighbors = 5
+  ) 
 
 # repeated cross validation ----
 set.seed(1234)
-folds <- vfold_cv(train_data, v = 10, strata = dx_icd_level1, repeats = 1)
+folds <- vfold_cv(train_data, v = 10, strata = dx_icd_level2, repeats = 1)
+# folds <- vfold_cv(train_data, v = 10, strata = dx_icd_level2, repeats = 10)
 
-library(doMC)
-registerDoMC(cores = 8)
+registerDoMC(cores = 6)
 
 set.seed(1234)
-rf_workflow <-
+xgb_workflow <-
   workflow() |>
-  add_model(rf_model) |>
+  add_model(xgb_model) |>
   add_recipe(data_recipe)
 
-# last sanity check before running the model ----
-rf_workflow$pre$actions$recipe$recipe$var_info$variable
-
-# train and tune rf ----
+# train and tune xgb ----
 set.seed(1234)
 system.time(
   res_model <-
-    rf_workflow |>
+    xgb_workflow |>
     tune_grid(
       resamples = folds,
-      grid = 10,
-      control = control_grid(save_pred = TRUE),
+      grid = 50,
+      control = control_grid(save_pred = TRUE, verbose = TRUE),
       metrics = metric_set(accuracy, bal_accuracy, f_meas, roc_auc))
 )
-#46 min
 
+# approx 30-45 min
 autoplot(res_model, metric = "roc_auc")
 autoplot(res_model, metric = "bal_accuracy")
 
-collect_metrics(res_model) |>
-  dplyr::filter(.metric == "roc_auc") |>
-  mutate(min_n = factor(min_n)) |>
-  ggplot(aes(mtry, mean, color = min_n)) +
-  geom_line(aes(group = min_n)) +
-  geom_point()
-
 show_best(res_model, "roc_auc")
 
-rf_best <-
+xgb_best <-
   res_model |>
   select_best("roc_auc")
-  ## select_best("bal_accuracy")
+  # select_best("bal_accuracy")
 
-# saveRDS(res_model, file.path("analysis", "relative", "models", "level1_blood_rf_model.rds"))
-# saveRDS(res_model, file.path("analysis", "relative", "models", "level1_csf_rf_model.rds"))
-# saveRDS(res_model, file.path("analysis", "relative", "models", "level1_basic_rf_model.rds"))
-# saveRDS(res_model, file.path("analysis", "relative", "models", "level1_combined_rf_model.rds"))
+qs::qsave(res_model, file.path("analysis", "relative", "models", "ms_somatoform_xgb_combined.qs"))
+qs::qsave(res_model, file.path("analysis", "relative", "models", "ms_somatoform_xgb_basic.qs"))
 
-res_model <- readRDS(file.path("analysis", "relative", "models", "level1_blood_rf_model.rds"))
+qs::qsave(res_model, file.path("analysis", "relative", "models", "dementia_somatoform_xgb_combined.qs"))
+qs::qsave(res_model, file.path("analysis", "relative", "models", "dementia_somatoform_xgb_basic.qs"))
 
 # build last model ----
-
-#necessary to specify the model again to include the importance
-last_rf_model <-
-  rand_forest(mtry = rf_best$mtry, min_n = rf_best$min_n, trees = 3000) |>
-  set_mode("classification") |>
-  set_engine("ranger", importance = "impurity")
-
-# the last workflow ----
-last_rf_workflow <-
-  rf_workflow |>
-  update_model(last_rf_model)
+final_xgb <- finalize_workflow(xgb_workflow, xgb_best)
 
 #fit best model to train data and evaluate on test data ----
 set.seed(1234)
-
-last_fit <-
-  last_rf_workflow |>
+last_fit <- 
+  final_xgb |>
   last_fit(splits,
-           metrics = metric_set(accuracy, bal_accuracy, f_meas, roc_auc)
-           )
+    metrics = metric_set(accuracy, bal_accuracy, f_meas, roc_auc)
+  )
 
 final_metric <- collect_metrics(last_fit)
 
-last_fit <- readRDS(file.path("analysis", "relative", "models", "level1_blood_rf_final_model.rds"))
-last_fit <- readRDS(file.path("analysis", "relative", "models", "level1_csf_rf_final_model.rds"))
-last_fit <- readRDS(file.path("analysis", "relative", "models", "level1_basic_rf_final_model.rds"))
-last_fit <- readRDS(file.path("analysis", "relative", "models", "level1_combined_rf_final_model.rds"))
+qs::qsave(last_fit, file.path("analysis", "relative", "models", "ms_somatoform_xgb_combined_final.qs"))
+qs::qsave(last_fit, file.path("analysis", "relative", "models", "ms_somatoform_xgb_basic_final.qs"))
+
+qs::qsave(last_fit, file.path("analysis", "relative", "models", "dementia_somatoform_xgb_combined_final.qs"))
+qs::qsave(last_fit, file.path("analysis", "relative", "models", "dementia_somatoform_xgb_basic_final.qs"))
 
 # function to plot confusion matrix  not normalized ----
 plotConfMat <- function(last_fit, name) {
   collect_predictions(last_fit) |> # nolint
-    conf_mat(truth = dx_icd_level1, estimate = .pred_class) |> # nolint
+    conf_mat(truth = dx_icd_level2, estimate = .pred_class) |> # nolint
     autoplot(type = "heatmap") +
-    # viridis::scale_fill_viridis() +
-    scale_fill_gradient(low = "lightblue", high = "lightblue") +
-    ggtitle(glue::glue("{name} ROC AUC {signif(final_metric$.estimate,2)[4]}, BACC {signif(final_metric$.estimate,2)[2]}")) +
+    # scale_fill_distiller(palette = "RdBu") +
+    viridis::scale_fill_viridis() +
+    # scale_fill_gradient(low = "blue", high = "red") +
+    ggtitle(glue::glue("{name}
+     ROC AUC {signif(final_metric$.estimate,2)[4]},
+     BACC {signif(final_metric$.estimate,2)[2]}")) +
     theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.3))
-  ggsave(file.path("analysis", "relative", "models", glue::glue("{name}_rf_conf_mat.pdf")), width = 5, height = 5)
+  ggsave(file.path("analysis", "relative", "models", glue::glue("{name}_xgb_conf_mat.pdf")), width = 5, height = 5)
 }
 
-plotConfMat(last_fit, "level1_blood")
-plotConfMat(last_fit, "level1_csf")
-plotConfMat(last_fit, "level1_basic")
-plotConfMat(last_fit, "level1_combined")
+plotConfMat(last_fit, "ms_somatoform_combined")
+plotConfMat(last_fit, "ms_somatoform_basic")
 
-# # function to plot confusion matrix normalized ----
-# plotConfMat <- function(last_fit, name) {
-#   conf_mat <- collect_predictions(last_fit) |> # nolint
-#     conf_mat(truth = dx_icd_level1, estimate = .pred_class)
-#   levels <- colnames(conf_mat$table)
-#   conf_mat$table |>
-#     as.data.frame.table() |>
-#     pivot_wider(names_from = Prediction, values_from = Freq) |>
-#     mutate(across(all_of(levels), function(x) (x - mean(x)) / sd(x))) |>
-#     pivot_longer(all_of(levels), names_to = "Prediction", values_to = "Freq") |>
-#     mutate(Prediction = factor(Prediction, rev(levels))) |>
-#     ggplot2::ggplot(ggplot2::aes(x = Truth, y = Prediction, fill = Freq)) +
-#     ggplot2::geom_tile() +
-#     ggplot2::theme(
-#       panel.background = ggplot2::element_blank(),
-#       legend.position = "none"
-#     ) +
-#     ggplot2::geom_text(mapping = ggplot2::aes(label = signif(Freq, 2))) +
-#     viridis::scale_fill_viridis() +
-#     ggtitle(glue::glue("{name} ROC AUC {signif(final_metric$.estimate,2)[4]}, BACC {signif(final_metric$.estimate,2)[2]}")) +
-#     theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.3))
-#   ggsave(file.path("analysis", "relative", "models", glue::glue("{name}_rf_conf_mat.pdf")), width = 5, height = 5)
-# }
+plotConfMat(last_fit, "dementia_somatoform_combined")
+plotConfMat(last_fit, "dementia_somatoform_basic")
 
+plotConfMat(last_fit, "dementia_parkinson_combined")
+plotConfMat(last_fit, "tia_ischemic_stroke_combined")
 
+plotConfMat(last_fit, "otherpnp_VN_combined")
+plotConfMat(last_fit, "dementia_MCI_combined")
 
-# plotConfMat(last_fit, "level1_combined")
+plotConfMat(last_fit, "somatoform_VN_combined")
 
-#rf models ----
-saveRDS(last_fit, file.path("analysis", "relative", "models", "level1_blood_rf_final_model.rds"))
-saveRDS(last_fit, file.path("analysis", "relative", "models", "level1_csf_rf_final_model.rds"))
-saveRDS(last_fit, file.path("analysis", "relative", "models", "level1_basic_rf_final_model.rds"))
-saveRDS(last_fit, file.path("analysis", "relative", "models", "level1_combinded_rf_final_model.rds"))
+plotConfMat(last_fit, "somatoform_ischemic_stroke_combined")
+plotConfMat(last_fit, "somatoform_ischemic_stroke_basic")
 
-last_fit <- readRDS(file.path("analysis", "relative", "models", "level1_blood_rf_final_model.rds"))
-last_fit <- readRDS(file.path("analysis", "relative", "models", "level1_csf_rf_final_model.rds"))
-last_fit <- readRDS(file.path("analysis", "relative", "models", "level1_basic_rf_final_model.rds"))
+plotConfMat(last_fit, "MS_ON_combined")
+plotConfMat(last_fit, "MS_ON_basic")
+
 
 #vip with auc train/test ----
 last_fit |>
@@ -236,14 +267,67 @@ last_fit |>
   xlab("Predictor importance") +
   theme(legend.position = "none")
 
-ggsave(file.path("analysis", "relative", "models", "level1_blood_rf_vip.pdf"), width = 3, height = 2)
-ggsave(file.path("analysis", "relative", "models", "level1_csf_rf_vip.pdf"), width = 3, height = 2)
-ggsave(file.path("analysis", "relative", "models", "level1_basic_rf_vip.pdf"), width = 3, height = 2)
+ggsave(file.path("analysis", "relative", "models", "ms_somatoform_xgb_combined_vip.pdf"), width = 3, height = 2)
+ggsave(file.path("analysis", "relative", "models", "ms_somatoform_xgb_basic_vip.pdf"), width = 3, height = 2)
 
+ggsave(file.path("analysis", "relative", "models", "dementia_somatoform_xgb_combined_vip.pdf"), width = 3, height = 2)
+ggsave(file.path("analysis", "relative", "models", "dementia_somatoform_xgb_combined_vip.pdf"), width = 3, height = 2)
 
-  combined_complete |>
-    dplyr::filter(dx_icd_level1 %in% sel_icd_level1) |>
-    dplyr::mutate(dx_icd_level1 = factor(dx_icd_level1)) |>
-    dplyr::select(file_stem_lukas1, dx_icd_level1, granulos_CSF:lactate_CSF)|>
-    write_csv("lukas_predict_level1.csv")
+last_fit_combined <- qs::qread(file.path("analysis", "relative", "models", "ms_somatoform_xgb_combined_final.qs"))
+last_fit_basic <- qs::qread(file.path("analysis", "relative", "models", "ms_somatoform_xgb_basic_final.qs"))
 
+last_fit_combined <- qs::qread(file.path("analysis", "relative", "models", "dementia_somatoform_xgb_combined_final.qs"))
+last_fit_basic <- qs::qread(file.path("analysis", "relative", "models", "dementia_somatoform_xgb_basic_final.qs"))
+
+# roc curves ---- 
+roc_combined <- 
+  last_fit_combined |>
+  collect_predictions() |>
+  roc_curve(truth = dx_icd_level2, '.pred_somatoform') |>
+  mutate(model = "combined")
+
+combined_metric <- collect_metrics(last_fit_combined)
+
+roc_routine <- 
+  last_fit_basic |>
+  collect_predictions() |>
+  roc_curve(truth = dx_icd_level2, '.pred_somatoform') |>
+  mutate(model = "routine")
+
+routine_metric <- collect_metrics(last_fit_basic)
+
+roc_curve <-
+  bind_rows(roc_combined, roc_routine) |>
+  ggplot(aes(x = 1 - specificity, y = sensitivity)) +
+  geom_path(lwd = 1, aes(color = model)) +
+  geom_abline(lty = 3) +
+  coord_equal() +
+  theme_bw() +
+  geom_label(
+    aes(
+      label =
+        paste0(
+          "combined ROC AUC: ",
+          signif(combined_metric$.estimate, 2)[4],
+          " BACC: ",
+          signif(combined_metric$.estimate, 2)[2],
+          "\nroutine ROC AUC: ",
+          signif(routine_metric$.estimate, 2)[4],
+          " BACC: ",
+          signif(routine_metric$.estimate, 2)[2]
+        ),
+      x = 0.5,
+      y = 0.2
+    ),
+    size = 2.5
+  )
+
+ggsave(
+  plot = roc_curve,
+  file.path("analysis", "relative", "models", "ms_somatoform_xgb_roc.pdf"), width = 4, height = 4
+)
+
+ggsave(
+  plot = roc_curve,
+  file.path("analysis", "relative", "models", "dementia_somatoform_xgb_roc.pdf"), width = 4, height = 4
+)
