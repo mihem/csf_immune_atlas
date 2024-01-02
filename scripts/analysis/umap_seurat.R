@@ -53,15 +53,16 @@ seu <-
     Seurat::FindClusters(resolution = 0.3) |>
     Seurat::RunUMAP(dims = 1:40)
 
-#merge cl4 ----
+#merge cl4 and 5 ----
 seu$cluster <- seu$RNA_snn_res.0.3
 seu$cluster[seu$cluster == 4] <- 0
+seu$cluster[seu$cluster == 5] <- 0
 
 # label clusters ----
 lookup_clusters <-
     tibble(
-        old = c(0, 1, 2, 3, 5),
-        new = c("healthyCSF", "neurodegenerative", "autoimmune", "meningoencephalitis", "vasculitic neuropathy" )
+        old = c(0, 1, 2, 3),
+        new = c("healthyCSF", "neurodegenerative", "autoimmune", "meningoencephalitis" )
     )
 
 seu$cluster <- lookup_clusters$new[match(seu$cluster, lookup_clusters$old)]
@@ -120,10 +121,6 @@ seu_markers <-
     dplyr::filter(avg_log2FC > 0.5) |>
     dplyr::mutate(var = gsub(x = var, pattern = "\\d$", replacement = ""))
 
-
-seu_markers  |>
-    dplyr::filter(cluster == "vasculitic neuropathy")
-
 seu_markers$var    
 
 dotplot_seurat <-
@@ -147,6 +144,8 @@ hmap_seurat <-
     mutate(cluster = paste0("cluster ", cluster)) |>
     pivot_wider(names_from = "cluster", values_from = "value", values_fill = 0) |>
     mutate(var = gsub(x = var, pattern = "-", replacement = "_")) |>
+    mutate(var = gsub(x = var, pattern = "_", replacement = " ")) |>
+    mutate(var = gsub(x = var, pattern = "basic", replacement = "routine")) |>
     column_to_rownames("var") |>
     t() |>
     pheatmap(
