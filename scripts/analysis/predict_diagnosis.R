@@ -35,11 +35,11 @@ data_tidymodels_combined <-
     mutate(dx_icd_level2 = factor(dx_icd_level2, levels = c("somatoform", "MS"))) |>
     dplyr::select(dx_icd_level2, granulos_CSF:lactate_CSF)
 
-# data_tidymodels_combined <-
-#     combined_fil |>
-#     dplyr::filter(dx_icd_level2 %in% c("somatoform", "dementia")) |>
-#     mutate(dx_icd_level2 = factor(dx_icd_level2, levels = c("somatoform", "dementia"))) |>
-#     dplyr::select(dx_icd_level2, granulos_CSF:lactate_CSF)
+data_tidymodels_combined <-
+    combined_fil |>
+    dplyr::filter(dx_icd_level2 %in% c("somatoform", "dementia")) |>
+    mutate(dx_icd_level2 = factor(dx_icd_level2, levels = c("somatoform", "dementia"))) |>
+    dplyr::select(dx_icd_level2, granulos_CSF:lactate_CSF)
 
 
 # only basic ----
@@ -145,6 +145,7 @@ final_metric <- collect_metrics(last_fit)
 
 # qs::qsave(last_fit, file.path("analysis", "relative", "models", "dementia_somatoform_xgb_combined_final.qs"))
 # qs::qsave(last_fit, file.path("analysis", "relative", "models", "dementia_somatoform_xgb_basic_final.qs"))
+last_fit <- qs::qread(file.path("analysis", "relative", "models", "ms_somatoform_xgb_basic_final.qs"))
 
 # function to plot confusion matrix  not normalized ----
 plotConfMat <- function(last_fit, name) {
@@ -173,9 +174,11 @@ last_fit |>
   vip::vi() |>
   dplyr::filter(Importance != 0) |>
   #filter top 10 important ones
-  dplyr::slice_max(order_by = Importance, n = 10) |>
-  ## mutate(Importance = if_else(Sign == "POS", Importance*-1, Importance)) |> # somehow wrong direction
-  ggplot(aes(x = Importance, y = fct_reorder(Variable, Importance))) +
+  dplyr::slice_max(order_by = Importance, n = 10)  |>
+  mutate(Variable = gsub(x = Variable, pattern = "_" , replacement = " ")) |>
+  mutate(Variable = gsub(x = Variable, pattern = "basic", replacement = "routine")) |>
+  mutate(Variable = fct_reorder(Variable, Importance)) |>
+  ggplot(aes(x = Importance, y = Variable)) +
   geom_point(color = "#F8885F") +
   geom_segment(aes(xend = 0, yend = Variable), color = "#F8885F") +
   theme_bw() +
@@ -187,7 +190,7 @@ last_fit |>
 # ggsave(file.path("analysis", "relative", "models", "ms_somatoform_xgb_basic_vip.pdf"), width = 3, height = 2)
 
 # ggsave(file.path("analysis", "relative", "models", "dementia_somatoform_xgb_combined_vip.pdf"), width = 3, height = 2)
-# ggsave(file.path("analysis", "relative", "models", "dementia_somatoform_xgb_combined_vip.pdf"), width = 3, height = 2)
+# ggsave(file.path("analysis", "relative", "models", "dementia_somatoform_xgb_basic_vip.pdf"), width = 3, height = 2)
 
 # last_fit_combined <- qs::qread(file.path("analysis", "relative", "models", "ms_somatoform_xgb_combined_final.qs"))
 # last_fit_basic <- qs::qread(file.path("analysis", "relative", "models", "ms_somatoform_xgb_basic_final.qs"))
