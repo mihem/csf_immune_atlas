@@ -6,7 +6,7 @@ library(tidyverse)
 library(tidymodels)
 library(bestNormalize)
 library(mice)
-library(skimrp)
+library(skimr)
 library(qs)
 
 # read preprocessed data ---
