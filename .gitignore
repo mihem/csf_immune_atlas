@@ -12,5 +12,6 @@
 #!*/a/b/c/*
 .Rproj.user
 old/
+all_lmds/
 scripts/preprocessing
 scripts/kknms
