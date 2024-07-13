@@ -13,7 +13,7 @@ all_data_one <- read_csv("orbis_flow_rel_one.csv")
 subfolders <- file.path(
   "analysis",
   "relative",
-  c("qc", "categories", "correlation", "feature", "heatmap", "umap", "abundance", "top", "models", "interval")
+  c("qc", "categories", "correlation", "feature", "heatmap", "umap", "abundance", "top", "models", "interval", "boxplots")
 )
 lapply(subfolders, dir.create, recursive = TRUE)
 
