@@ -114,11 +114,11 @@ system.time(
 autoplot(res_model, metric = "roc_auc")
 autoplot(res_model, metric = "bal_accuracy")
 
-show_best(res_model, "roc_auc")
+show_best(res_model, metric = "roc_auc")
 
 xgb_best <-
   res_model |>
-  select_best("roc_auc")
+  select_best(metric = "roc_auc")
   # select_best("bal_accuracy")
 
 # qs::qsave(res_model, file.path("analysis", "relative", "models", "ms_somatoform_xgb_combined.qs"))
