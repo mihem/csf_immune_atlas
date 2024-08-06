@@ -4083,6 +4083,20 @@
       ],
       "Hash": "ab6371d8653ce5f2f9290f4ec7b42a8e"
     },
+    "xgboost": {
+      "Package": "xgboost",
+      "Version": "1.7.7.1",
+      "Source": "Repository",
+      "Repository": "RSPM",
+      "Requirements": [
+        "Matrix",
+        "R",
+        "data.table",
+        "jsonlite",
+        "methods"
+      ],
+      "Hash": "6303e61eac62aef7bd2b396ef7e24386"
+    },
     "xml2": {
       "Package": "xml2",
       "Version": "1.3.6",
