@@ -203,8 +203,10 @@ ggsave(file.path("analysis", "relative", "qc", "histogram_blood_norm_imputed.pdf
 all_data_norm_complete <- list(csf = csf_norm_complete, blood = blood_norm_complete)
 qs::qsave(all_data_norm_complete, "final_one_rel_norm_complete.qs")
 
-#combined
-#keep only those samples with complete csf and blood
+all_data_norm_complete <- qread("final_one_rel_norm_complete.qs")
+
+# combined
+#keep only those samples with complete csf and blood (note: all blood samples are complete after imputation)
 skim(combined_norm_complete)
 
 combined_complete_imputed <-
@@ -214,6 +216,7 @@ combined_complete_imputed <-
     select(where(function(x) !all(is.na(x)))) |>
     drop_na() |>
     rename_with(function(x) str_remove(x, "_CSF"), c(protein_CSF_CSF:IgM_ratio_CSF, glucose_CSF_CSF))
+
 
 combined_complete <-
   combined_complete_imputed |>
@@ -264,3 +267,77 @@ combined_norm_complete |>
 ggsave(file.path("analysis", "relative", "qc", "histogram_combined_norm_imputed.pdf"), width = 10, height = 30)
 
 qs::qsave(combined_norm_complete, "final_one_rel_combined_norm_complete.qs")
+
+# compare samples with blood only to samples finally used (matched CSF/blood samples with complete data)
+all_data_one_fil <- qs::qread("final_one_rel.qs")
+
+combined_complete <- qs::qread("final_one_rel_combined_complete.qs")
+
+combined_complete_csf_blood <-
+  combined_complete |>
+  select(sample_pair_id) |>
+  mutate(group = "CSF_blood")
+
+blood_only <-
+  all_data_one_fil$blood |>
+  anti_join(combined_complete_csf_blood, join_by(sample_pair_id))
+
+# plot categories of only blood
+blood_only_categories <-
+  blood_only |>
+  count(dx_icd_level2) |>
+  drop_na(dx_icd_level2) |>
+  ggplot(aes(x = reorder(dx_icd_level2, n), y = n, fill = dx_icd_level2)) +
+  geom_col() +
+  theme_bw() +
+  theme(
+    legend.position = "none",
+    axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5)
+  ) +
+  coord_flip() +
+  xlab("") +
+  ylab("")
+
+ggsave(
+  plot = blood_only_categories,
+  filename = file.path("analysis", "relative", "categories", "blood_only_categories.pdf"), width = 5, height = 5,
+  device = cairo_pdf
+  )
+
+# combined only blood and final samples
+comparison_only_blood <-
+  all_data_one_fil$blood |>
+  left_join(combined_complete_csf_blood) |>
+  mutate(group = ifelse(is.na(group), "blood_only", "CSF_blood"))
+
+dplyr::count(comparison_only_blood, group)
+
+compBoxplot <- function(par) {
+  comparison_only_blood |>
+    ggplot(aes(x = group, y = .data[[par]], fill = group)) +
+    geom_boxplot() +
+    theme_bw() +
+    xlab("") + 
+    theme(legend.position = "none") 
+}
+
+vars_compare <-
+  comparison_only_blood |>
+  select(granulos:HLA_DR_T) |>
+  names()
+
+comparisons_only_blood_plots <- lapply(vars_compare, compBoxplot)
+comparsions_only_blood_patch <- patchwork::wrap_plots(comparisons_only_blood_plots, ncol = 4)
+
+ggsave(
+  plot = comparsions_only_blood_patch,
+  filename = file.path("analysis", "relative", "boxplots", "comparison_only_blood.pdf"),
+  width = 10,
+  height = 15,
+)
+
+all_data_one_fil$csf |>
+  anti_join(combined_complete, join_by(sample_pair_id))
+
+all_data_one_fil$blood |>
+  anti_join(combined_complete, join_by(sample_pair_id))
