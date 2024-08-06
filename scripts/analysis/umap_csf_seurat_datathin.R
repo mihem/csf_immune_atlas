@@ -268,14 +268,25 @@ ggsave(
 
 qsave(stability_res, file.path("datathin_cluster_stability.qs"))
 
-# save Seurat object ---
 seu_csf_train <- Seurat::FindClusters(seu_csf_train, resolution = 0.5)
-seu_csf_train$cluster <- Idents(seu_csf_train)
-seu_csf_train$cluster <- paste0("cl", seu_csf_train$cluster)
+
+
+# label clusters ----
+lookup_clusters <-
+    tibble(
+        old = c(0, 1, 2, 3, 4, 5),
+        new = c("healthyCSF", "neurodegenerative", "autoimmune", "undefined", "meningoencephalitis1", "meningoencephalitis2")
+    )
+
+
+seu_csf_train$cluster <- lookup_clusters$new[match(seu_csf_train$cluster, lookup_clusters$old)]
+seu_csf_train@misc$cluster_order <- lookup_clusters$new
+seu_csf_train@misc$cluster_col <- setNames(pals::cols25(length(seu_csf_train@misc$cluster_order)), seu_csf_train@misc$cluster_order)
+seu_csf_train$cluster <- factor(seu_csf_train$cluster, levels = seu_csf_train@misc$cluster_order)
 Idents(seu_csf_train) <- seu_csf_train$cluster
 
 umap_csf <-
-    Seurat::DimPlot(seu_csf_train, label = TRUE, pt.size = 1, alpha = .5, cols = pals::cols25()) +
+    Seurat::DimPlot(seu_csf_train, label = TRUE, pt.size = 1, alpha = .5, cols = seu_csf_train@misc$cluster_col) +
     labs(x = "UMAP1", y = "UMAP2") +
     theme(
         axis.text = element_blank(),
@@ -310,9 +321,6 @@ abundance_combined_soupx_csf_norm_datathin <-
 lapply(unique(seu_csf_train$cluster), abundanceCategoryPlot, data = abundance_combined_soupx_csf_norm_datathin)
 
 # find markers ----
-seu_csf_train$cluster <- paste0("cl", seu_csf_train$cluster)
-Idents(seu_csf_train) <- seu_csf_train$cluster
-
 seu_markers_csf <-
     Seurat::FindAllMarkers(seu_csf_train, only.pos = TRUE) |>
     rownames_to_column("var") |>
