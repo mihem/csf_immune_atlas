@@ -97,9 +97,7 @@ res_model <- qread(file.path("analysis", "relative", "models", "cluster_xgb_mode
 
 xgb_best <-
   res_model |>
-  # tune::select_best(metric = "roc_auc")
-  select_best(metric = "bal_accuracy")
-# select_best(metric = "f_meas")
+  tune::select_best(metric = "roc_auc")
 
 # build last model ----
 final_xgb <- finalize_workflow(xgb_workflow, xgb_best)
@@ -123,8 +121,6 @@ final_metric <- collect_metrics(last_fit)
 qs::qsave(last_fit, file.path("analysis", "relative", "models", "cluster_xgb_model_datathin_res_0_5_final.qs"))
 qs::qsave(last_fit, file.path("analysis", "relative", "models", "cluster_xgb_model_datathin_ms_final.qs"))
 qs::qsave(last_fit, file.path("analysis", "relative", "models", "cluster_xgb_model_datathin_dementia_final.qs"))
-
-last_fit <- qread(file.path("analysis", "relative", "models", "cluster_xgb_model_datathin_res_0_5_final.qs"))
 
 # function to plot confusion matrix ----
 plotConfMat <- function(last_fit, name) {
@@ -174,9 +170,15 @@ roc_macro_weighted <-
   roc_auc(truth = cluster, .pred_cl0:.pred_cl5, estimator = "macro_weighted") |>
   mutate(cluster = "macro_weighted")
 
-# Assuming last_fit is already defined
+# label clusters ---
+lookup_clusters <-
+    tibble(
+        old = c("cl0", "cl1", "cl2", "cl3", "cl4", "cl5"),
+        new = c("healthyCSF", "neurodegenerative", "autoimmune", "undefined", "meningoencephalitis1", "meningoencephalitis2")
+    )
+
 predictions <- last_fit  |>
-  collect_predictions()
+  collect_predictions() 
 
 # Function to calculate one-vs-all ROC AUC
 calculate_roc_auc <- function(data, class) {
@@ -209,11 +211,12 @@ roc_auc_curve <-
   last_fit |>
   collect_predictions() |>
   roc_curve(truth = cluster, .pred_cl0:.pred_cl5) |>
+  mutate(.level = lookup_clusters$new[match(.level, lookup_clusters$old)]) |>
   ggplot(aes(x = 1 - specificity, y = sensitivity)) +
   geom_path(lwd = 1, aes(color = .level)) +
   geom_abline(lty = 3) +
   coord_equal() +
-  scale_color_manual(values = pals::cols25()) +
+  scale_color_manual(values = seu_csf_train@misc$cluster_col) +
   theme_bw() +
   guides(color = guide_legend(title = NULL)) +
   annotate(
@@ -224,33 +227,33 @@ roc_auc_curve <-
     size = 2,
     label = paste0(
       "ROC AUC\n",
-      roc_auc_results$cluster[1],
+      roc_auc_results_single$cluster[1],
       ": ",
-      signif(roc_auc_results$.estimate[1], 2),
+      signif(roc_auc_results_single$.estimate[1], 2),
       "\n",
-      roc_auc_results$cluster[2],
+      roc_auc_results_single$cluster[2],
       ": ",
-      signif(roc_auc_results$.estimate[2], 2),
+      signif(roc_auc_results_single$.estimate[2], 2),
     "\n",
-      roc_auc_results$cluster[3],
+      roc_auc_results_single$cluster[3],
       ": ",
-      signif(roc_auc_results$.estimate[3], 2),
+      signif(roc_auc_results_single$.estimate[3], 2),
       "\n",
-      roc_auc_results$cluster[4],
+      roc_auc_results_single$cluster[4],
       ": ",
-      signif(roc_auc_results$.estimate[4], 2),
+      signif(roc_auc_results_single$.estimate[4], 2),
     "\n",
-      roc_auc_results$cluster[5],
+      roc_auc_results_single$cluster[5],
       ": ",
-      signif(roc_auc_results$.estimate[5], 2),
+      signif(roc_auc_results_single$.estimate[5], 2),
     "\n",
-      roc_auc_results$cluster[6],
+      roc_auc_results_single$cluster[6],
       ": ",
-      signif(roc_auc_results$.estimate[6], 2),
+      signif(roc_auc_results_single$.estimate[6], 2),
       "\n",
-      roc_auc_results$cluster[7],
+      roc_auc_results_single$cluster[7],
       ": ",
-      signif(roc_auc_results$.estimate[7], 2)
+      signif(roc_auc_results_single$.estimate[7], 2)
     )
   )
 
