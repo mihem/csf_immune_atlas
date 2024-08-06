@@ -50,9 +50,6 @@ car::qqp(combined_complete_norm$granulos_basic_CSF,
  shape = weibull_fit_granulos_basic$estimate[1],
   )
 
-# maybe: B_CSF bright_NK_CSF, cell_count_CSF, dim_NK_CSF, dp_T_CSF, dn_T_CSF, HLA_DR_dp_T, lymphos_basic_CSF, plasma_CSF
-# erys_basic_CSF, granulos_basic_CSF, OCB_CSF, other_cells_basic_CSF,
-
 # prepare data for datathin splitting ---
 datathin_rows <- nrow(combined_complete_norm)
 
