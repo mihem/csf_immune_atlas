@@ -32,7 +32,7 @@ seu_data <-
   select(granulos_CSF:lactate_CSF) |>
   t()
 
-seu@assays$RNA$counts
+seu_blood@assays$RNA$counts
 
 # create Seurat object ---
 seu <- Seurat::CreateSeuratObject(seu_data)
@@ -53,7 +53,7 @@ seu <-
     Seurat::FindClusters(resolution = 0.3) |>
     Seurat::RunUMAP(dims = 1:40)
 
-#merge cl4 and 5 ----
+#merge small clusters ----
 seu$cluster <- seu$RNA_snn_res.0.3
 seu$cluster[seu$cluster == 4] <- 0
 seu$cluster[seu$cluster == 5] <- 0
@@ -121,7 +121,8 @@ seu_markers <-
     dplyr::filter(avg_log2FC > 0.5) |>
     dplyr::mutate(var = gsub(x = var, pattern = "\\d$", replacement = ""))
 
-seu_markers$var    
+seu_markers |>
+    dplyr::filter(cluster == 6)
 
 dotplot_seurat <-
     Seurat::DotPlot(seu, features = rownames(seu)) +
@@ -164,3 +165,30 @@ hmap_seurat <-
     )
 
 ggsave(plot = hmap_seurat, file.path("analysis", "relative", "top", "hmap_seurat.pdf"), width = 7, height = 3)
+
+# feature plot age
+FeaturePlot(seu, features = c("age"), reduction = "umap", pt.size = 0.5)
+str(seu@meta.data)
+
+rownames(seu)
+str(colnames(seu))
+
+# plot age in UMAP
+fplot_age <-
+    Embeddings(seu, "umap") |>
+    bind_cols(age = combined_complete$age) |>
+    ggplot(aes(x = umap_1, y = umap_2, color = age)) +
+    geom_point(size = .5, alpha = .5) +
+    viridis::scale_color_viridis() +
+    labs(x = "UMAP1", y = "UMAP2") +
+    theme_classic() +
+    theme(
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        axis.title.x = element_text(size = 15),
+        axis.title.y = element_text(size = 15),
+        panel.border = element_rect(color = "black", linewidth = 1, fill = NA),
+        aspect.ratio = 1,
+    )
+
+ggsave(plot = fplot_age, filename = file.path("analysis", "relative", "feature", "fplot_var_combined_umap_age.png"), width = 3, height = 3)
