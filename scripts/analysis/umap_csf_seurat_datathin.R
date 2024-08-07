@@ -31,14 +31,14 @@ seu_data_csf <-
     dplyr::select(matches("CSF|ratio")) |>
     t()
 
-# finding the right distribution is tricky because it's different for every variable
-# and they not follow any of the well described distribution when not normalized
-# for the normalized version most data follow the normal distribution quite well
+# finding the right distribution ----
 fitdistrplus::descdist(combined_complete_norm$granulos_CSF)
 fitdistrplus::descdist(combined_complete_norm$cell_count_CSF)
-fitdistrplus::descdist(combined_complete_norm$OCB_CSF)
 
-norm_fit_granulos <- fitdistrplus::fitdist(combined_complete_norm$granulos_CSF, "norm", method = "mme")
+# normal distribution fits quite well for normalized flow cytometry paramters
+# but for routine paramters weibull distribution fits better
+
+# check distribution in a qqplot ----
 weibull_fit_granulos_basic <- fitdistrplus::fitdist(combined_complete_norm$granulos_basic_CSF+1, "weibull", method = "mle")
 
 car::qqp(combined_complete_norm$B_CSF,
@@ -270,12 +270,11 @@ qsave(stability_res, file.path("datathin_cluster_stability.qs"))
 
 seu_csf_train <- Seurat::FindClusters(seu_csf_train, resolution = 0.5)
 
-
 # label clusters ----
 lookup_clusters <-
     tibble(
         old = c(0, 1, 2, 3, 4, 5),
-        new = c("healthyCSF", "neurodegenerative", "autoimmune", "undefined", "meningoencephalitis1", "meningoencephalitis2")
+        new = c("healthyCSF", "neurodegenerative", "CNS autoimmune", "undefined", "meningoencephalitis1", "meningoencephalitis2")
     )
 
 
@@ -336,11 +335,10 @@ hmap_seurat <-
     rownames_to_column("var") |>
     pivot_longer(cols = -var, names_to = "cluster") |>
     mutate(cluster = gsub(x = cluster, pattern = "RNA.", replacement = "")) |>
-    mutate(cluster = gsub(x = cluster, pattern = "\\.", replacement = " ")) |>
+    mutate(cluster = gsub(x = cluster, pattern = "\\.", replacement = " "))  |>
     left_join(seu_markers_csf, by = c("var", "cluster")) |> # combine with statistics
     dplyr::filter(!is.na(p_val)) |> # remove if below threshold defined above, so no statistics
     dplyr::select(var, cluster, value) |>
-    mutate(cluster = paste0("cluster ", cluster)) |>
     pivot_wider(names_from = "cluster", values_from = "value", values_fill = 0) |>
     mutate(var = gsub(x = var, pattern = "-", replacement = "_")) |>
     mutate(var = gsub(x = var, pattern = "_", replacement = " ")) |>
@@ -363,7 +361,7 @@ hmap_seurat <-
         clustering_method = "ward.D2",
     )
 
-ggsave(plot = hmap_seurat, file.path("analysis", "relative", "top", "hmap_seurat_csf_norm_train.pdf"), width = 7, height = 4)
+ggsave(plot = hmap_seurat, file.path("analysis", "relative", "top", "hmap_seurat_csf_norm_train.pdf"), width = 10, height = 4)
 
 dplyr::count(seu_csf_train@meta.data, cluster, dx_icd_level2) |>
     dplyr::filter(dx_icd_level2 == "dementia")
