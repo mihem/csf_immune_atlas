@@ -168,13 +168,13 @@ roc_macro_weighted <-
   last_fit |>
   collect_predictions() |>
   roc_auc(truth = cluster, .pred_cl0:.pred_cl5, estimator = "macro_weighted") |>
-  mutate(cluster = "macro_weighted")
+  mutate(new = "macro_weighted")
 
 # label clusters ---
 lookup_clusters <-
     tibble(
         old = c("cl0", "cl1", "cl2", "cl3", "cl4", "cl5"),
-        new = c("healthyCSF", "neurodegenerative", "autoimmune", "undefined", "meningoencephalitis1", "meningoencephalitis2")
+        new = c("healthyCSF", "neurodegenerative", "CNS autoimmune", "undefined", "meningoencephalitis1", "meningoencephalitis2")
     )
 
 predictions <- last_fit  |>
@@ -205,6 +205,7 @@ roc_auc_results_single <- lapply(
 # Combine results into a data frame
 roc_auc_results <-
   bind_rows(roc_auc_results_single) |>
+  left_join(lookup_clusters, by = c("cluster" = "old")) |>
   bind_rows(roc_macro_weighted)
 
 roc_auc_curve <-
@@ -221,39 +222,39 @@ roc_auc_curve <-
   guides(color = guide_legend(title = NULL)) +
   annotate(
     geom = "text",
-    x = 0.6,
-    y = 0.4,
+    x = 0.5,
+    y = 0.3,
     hjust = 0,
     size = 2,
     label = paste0(
       "ROC AUC\n",
-      roc_auc_results_single$cluster[1],
+      roc_auc_results$new[1],
       ": ",
-      signif(roc_auc_results_single$.estimate[1], 2),
+      signif(roc_auc_results$.estimate[1], 2),
       "\n",
-      roc_auc_results_single$cluster[2],
+      roc_auc_results$new[2],
       ": ",
-      signif(roc_auc_results_single$.estimate[2], 2),
+      signif(roc_auc_results$.estimate[2], 2),
     "\n",
-      roc_auc_results_single$cluster[3],
+      roc_auc_results$new[3],
       ": ",
-      signif(roc_auc_results_single$.estimate[3], 2),
+      signif(roc_auc_results$.estimate[3], 2),
       "\n",
-      roc_auc_results_single$cluster[4],
+      roc_auc_results$new[4],
       ": ",
-      signif(roc_auc_results_single$.estimate[4], 2),
+      signif(roc_auc_results$.estimate[4], 2),
     "\n",
-      roc_auc_results_single$cluster[5],
+      roc_auc_results$new[5],
       ": ",
-      signif(roc_auc_results_single$.estimate[5], 2),
+      signif(roc_auc_results$.estimate[5], 2),
     "\n",
-      roc_auc_results_single$cluster[6],
+      roc_auc_results$new[6],
       ": ",
-      signif(roc_auc_results_single$.estimate[6], 2),
+      signif(roc_auc_results$.estimate[6], 2),
       "\n",
-      roc_auc_results_single$cluster[7],
+      roc_auc_results$new[7],
       ": ",
-      signif(roc_auc_results_single$.estimate[7], 2)
+      signif(roc_auc_results$.estimate[7], 2)
     )
   )
 
