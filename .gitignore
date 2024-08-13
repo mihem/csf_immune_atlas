@@ -6,6 +6,7 @@
 !renv.lock
 !.gitignore
 !.renvignore
+!models/*
 
 # ...even if they are in subdirectories
 !*/
