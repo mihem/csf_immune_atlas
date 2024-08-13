@@ -155,6 +155,19 @@
       ],
       "Hash": "8c7115cd3a0e048bda2a7cd110549f7a"
     },
+    "MatrixModels": {
+      "Package": "MatrixModels",
+      "Version": "0.5-3",
+      "Source": "Repository",
+      "Repository": "RSPM",
+      "Requirements": [
+        "Matrix",
+        "R",
+        "methods",
+        "stats"
+      ],
+      "Hash": "0776bf7526869e0286b0463cb72fb211"
+    },
     "Polychrome": {
       "Package": "Polychrome",
       "Version": "1.5.1",
@@ -452,6 +465,34 @@
       ],
       "Hash": "6fc80c34fe3ded25ba2d9e2b53e8da4f"
     },
+    "SparseM": {
+      "Package": "SparseM",
+      "Version": "1.81",
+      "Source": "Repository",
+      "Repository": "RSPM",
+      "Requirements": [
+        "R",
+        "graphics",
+        "methods",
+        "stats",
+        "utils"
+      ],
+      "Hash": "2042cd9759cc89a453c4aefef0ce9aae"
+    },
+    "VGAM": {
+      "Package": "VGAM",
+      "Version": "1.1-11",
+      "Source": "Repository",
+      "Repository": "RSPM",
+      "Requirements": [
+        "R",
+        "methods",
+        "splines",
+        "stats",
+        "stats4"
+      ],
+      "Hash": "0a347b0c06e87ad505699b7a6290abd2"
+    },
     "WRS2": {
       "Package": "WRS2",
       "Version": "1.1-6",
@@ -694,6 +735,40 @@
       ],
       "Hash": "d7e13f49c19103ece9e58ad2d83a7354"
     },
+    "car": {
+      "Package": "car",
+      "Version": "3.1-2",
+      "Source": "Repository",
+      "Repository": "RSPM",
+      "Requirements": [
+        "MASS",
+        "R",
+        "abind",
+        "carData",
+        "grDevices",
+        "graphics",
+        "lme4",
+        "mgcv",
+        "nlme",
+        "nnet",
+        "pbkrtest",
+        "quantreg",
+        "scales",
+        "stats",
+        "utils"
+      ],
+      "Hash": "839b351f31d56e0147439eb22c00a66a"
+    },
+    "carData": {
+      "Package": "carData",
+      "Version": "3.0-5",
+      "Source": "Repository",
+      "Repository": "RSPM",
+      "Requirements": [
+        "R"
+      ],
+      "Hash": "ac6cdb8552c61bd36b0e54d07cf2aab7"
+    },
     "cellranger": {
       "Package": "cellranger",
       "Version": "1.1.0",
@@ -893,6 +968,25 @@
         "methods"
       ],
       "Hash": "8ee9ac56ef633d0c7cab8b2ca87d683e"
+    },
+    "datathin": {
+      "Package": "datathin",
+      "Version": "1.0",
+      "Source": "GitHub",
+      "RemoteType": "github",
+      "RemoteHost": "api.github.com",
+      "RemoteRepo": "datathin",
+      "RemoteUsername": "anna-neufeld",
+      "RemoteRef": "HEAD",
+      "RemoteSha": "58eb154609365fa7301ea0fa397fbf04dd8c28ed",
+      "Requirements": [
+        "R",
+        "VGAM",
+        "extraDistr",
+        "knitr",
+        "mvtnorm"
+      ],
+      "Hash": "ec5810daecbabba8473f7d6cc6169126"
     },
     "datawizard": {
       "Package": "datawizard",
@@ -1180,6 +1274,17 @@
         "methods"
       ],
       "Hash": "daf4a1246be12c1fa8c7705a0935c1a0"
+    },
+    "extraDistr": {
+      "Package": "extraDistr",
+      "Version": "1.10.0",
+      "Source": "Repository",
+      "Repository": "RSPM",
+      "Requirements": [
+        "R",
+        "Rcpp"
+      ],
+      "Hash": "49235792aad38657fffef40802f614c5"
     },
     "fansi": {
       "Package": "fansi",
@@ -2214,6 +2319,20 @@
       ],
       "Hash": "4b3ea27a19d669c0405b38134d89a9d1"
     },
+    "mclust": {
+      "Package": "mclust",
+      "Version": "6.1.1",
+      "Source": "Repository",
+      "Repository": "RSPM",
+      "Requirements": [
+        "R",
+        "grDevices",
+        "graphics",
+        "stats",
+        "utils"
+      ],
+      "Hash": "aa9cfd45e2c3297213e270d000d80655"
+    },
     "memoise": {
       "Package": "memoise",
       "Version": "2.0.1",
@@ -2374,6 +2493,17 @@
         "methods"
       ],
       "Hash": "4fd8900853b746af55b81fda99da7695"
+    },
+    "mvtnorm": {
+      "Package": "mvtnorm",
+      "Version": "1.2-5",
+      "Source": "Repository",
+      "Repository": "RSPM",
+      "Requirements": [
+        "R",
+        "stats"
+      ],
+      "Hash": "4d1891e59ac7a12b4e7e8a69349125f1"
     },
     "nlme": {
       "Package": "nlme",
@@ -2552,6 +2682,24 @@
         "parallel"
       ],
       "Hash": "68a2d681e10cf72f0afa1d84d45380e5"
+    },
+    "pbkrtest": {
+      "Package": "pbkrtest",
+      "Version": "0.5.2",
+      "Source": "Repository",
+      "Repository": "RSPM",
+      "Requirements": [
+        "MASS",
+        "Matrix",
+        "R",
+        "broom",
+        "dplyr",
+        "lme4",
+        "methods",
+        "numDeriv",
+        "parallel"
+      ],
+      "Hash": "3b5b99f4d3f067bb9c1d59317d071370"
     },
     "pheatmap": {
       "Package": "pheatmap",
@@ -2826,6 +2974,24 @@
         "stringfish"
       ],
       "Hash": "c0626a04f3021a24f05ab211280209ab"
+    },
+    "quantreg": {
+      "Package": "quantreg",
+      "Version": "5.97",
+      "Source": "Repository",
+      "Repository": "RSPM",
+      "Requirements": [
+        "MASS",
+        "Matrix",
+        "MatrixModels",
+        "R",
+        "SparseM",
+        "graphics",
+        "methods",
+        "stats",
+        "survival"
+      ],
+      "Hash": "1bbc97f7d637ab3917c514a69047b2c1"
     },
     "ragg": {
       "Package": "ragg",
