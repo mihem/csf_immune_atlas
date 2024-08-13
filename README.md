@@ -11,10 +11,10 @@ renv::restore()
 
 # Structure
 
-| Directory | Description |
-| --------- | -----------  |
-| scripts   | Code used for the analysis in the manuscript   |
-| models    | Final XGB models |
+| Directory            | Description |
+| ---------            | -----------  |
+| `scripts/analysis`   | Code used for the analysis in the manuscript |
+| `models`             | Final XGB models |
 
 # Contact
 If you have any questions, please contact us via [mheming.de](https://www.mheming.de/).
