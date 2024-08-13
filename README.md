@@ -17,4 +17,4 @@ renv::restore()
 | `models`             | Final XGB models |
 
 # Contact
-If you have any questions, please contact us via [mheming.de](https://www.mheming.de/).
+If you have any questions, please contact me via [mheming.de](https://osmzhlab.uni-muenster.de/mheming/#contact).
