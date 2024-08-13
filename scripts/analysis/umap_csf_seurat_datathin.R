@@ -112,12 +112,13 @@ data_thin1[1:10, 1:3, 1]
 data_thin2[1:10, 1:1, 1]
 data_thin[1:10, 1:33, 1]
 
+# split data into train and test ----
 data_train <- data_thin[,,1]
 data_test <- data_thin[,,2]
 colnames(data_train) <- c(csf_vars_cont, csf_vars_cat)
 colnames(data_test) <- c(csf_vars_cont, csf_vars_cat)
 
-# check if correlations are low ---
+# check if correlations are low ----
 cors <- sapply(1:ncol(data_train), function(u) round(cor(data_train[,u], data_test[,u]), 4))
 
 # visualize data ----
@@ -178,18 +179,11 @@ seu_csf_test <-
     Seurat::ScaleData() |>
     Seurat::RunPCA()
 
-ElbowPlot(seu_csf_test, ndims = 50)
-
 seu_csf_test <-
     seu_csf_test |>
     Seurat::RunUMAP(dims = 1:30)
 
 qsave(seu_csf_test, "seu_csf_test.qs")
-
-# using clustering from train
-Idents(seu_csf_test) <- seu_csf_train$cluster
-seu_csf_test$cluster_train <- seu_csf_train$cluster
-DimPlot(seu_csf_test, label = TRUE, split.by = "cluster_train")
 
 # stability metric to determine best resolution
 stabilityFun <- function(t) {
@@ -263,12 +257,17 @@ stability_plot <-
 
 ggsave(
     plot = stability_plot,
-    file.path("analysis", "relative", "umap", "datathin_stability_cluster.pdf"), width = 5, height = 4
+    file.path("analysis", "relative", "umap", "datathin_stability_cluster_csf.pdf"), width = 5, height = 4
 )
 
-qsave(stability_res, file.path("datathin_cluster_stability.qs"))
+qsave(stability_res, file.path("datathin_cluster_stability_csf.qs"))
 
+# FindClusters at recommended resolution ----
 seu_csf_train <- Seurat::FindClusters(seu_csf_train, resolution = 0.5)
+
+# using clustering from train ----
+seu_csf_test$cluster_train <- Idents(seu_csf_train)
+DimPlot(seu_csf_test, label = TRUE, split.by = "cluster_train")
 
 # label clusters ----
 lookup_clusters <-
@@ -362,115 +361,3 @@ hmap_seurat <-
     )
 
 ggsave(plot = hmap_seurat, file.path("analysis", "relative", "top", "hmap_seurat_csf_norm_train.pdf"), width = 10, height = 4)
-
-dplyr::count(seu_csf_train@meta.data, cluster, dx_icd_level2) |>
-    dplyr::filter(dx_icd_level2 == "dementia")
-
-dplyr::count(seu_csf_train@meta.data, cluster, dx_icd_level2) |>
-    dplyr::filter(dx_icd_level2 == "multiple sclerosis")
-
-combined_complete_norm |>
-    dplyr::filter(dx_icd_level2 == "multiple sclerosis") |>
-    dplyr::count(dx_biobanklist_level2)
-
-combined_complete_norm |>
-    dplyr::filter(dx_icd_level2 == "multiple sclerosis") |>
-
-combined_complete_norm |>
-    dplyr::filter(dx_icd_level2 == "multiple sclerosis") |>
-    dplyr::count(dx_andi_level2)
-
-combined_complete_norm |>
-    dplyr::filter(dx_icd_level2 == "dementia") |>
-    dplyr::count(dx_biobanklist_level2)
-
-combined_complete_norm |>
-    dplyr::filter(dx_icd_level2 == "dementia") |>
-    dplyr::count(dx_andi_level3)
-
-# extract multiple sclerosis patients for manual annotation
-combined_complete_norm |>
-    mutate(cluster = seu_csf_train$cluster) |>
-        dplyr::filter(dx_icd_level2 == "multiple sclerosis") |>
-        dplyr::select(
-            cluster,
-            pid,
-            first_name_orbis,
-            last_name_orbis,
-            birthdate_orbis,
-            measure_date,
-            sample_pair_id,
-            patient_id,
-            dx_icd_level2,
-            dx_biobanklist_level2
-        ) |>
-        arrange(cluster) |>
-        writexl::write_xlsx("patients_cluster_ms.xlsx")
-
-combined_complete_norm |>
-    mutate(cluster = seu_csf_train$cluster) |>
-        dplyr::filter(dx_icd_level2 == "dementia") |>
-        dplyr::select(
-            cluster,
-            pid,
-            first_name_orbis,
-            last_name_orbis,
-            birthdate_orbis,
-            measure_date,
-            sample_pair_id,
-            patient_id,
-            dx_icd_level2,
-            dx_biobanklist_level2
-        ) |>
-        arrange(cluster) |>
-        writexl::write_xlsx("patients_cluster_dementia.xlsx")
-
-# disease enrichment manual for ICD multiple sclerosis ---
-combined_dx_biobanklist_level2_matrix_ms <-
-  combined_complete_norm |>
-  dplyr::filter(dx_icd_level2 == "multiple sclerosis") |>
-  dplyr::select(dx_biobanklist_level2) |>
-  recipes::recipe(dx_biobanklist_level2 ~ .) |>
-  recipes::step_dummy(dx_biobanklist_level2) |>
-  recipes::prep() |>
-  recipes::bake(new_data = NULL) |>
-  as.matrix() |>
-  t()
-
-rownames(combined_dx_biobanklist_level2_matrix_ms) <- gsub(x = rownames(combined_dx_biobanklist_level2_matrix_ms), pattern = "\\.", replacement = " ")
-
-seu_csf_train_ms <- subset(seu_csf_train, subset = dx_icd_level2 == "multiple sclerosis")
-dplyr::count(seu_csf_train_ms@meta.data, dx_icd_level2)
-
-abundance_combined_soupx_csf_biobanklist_level2_ms <-
-    SoupX::quickMarkers(combined_dx_biobanklist_level2_matrix_ms, seu_csf_train_ms$cluster, FDR = 0.1, N = 100, expressCut = 0.9) |>
-    tibble() |>
-    mutate(gene = gsub(x = gene, pattern = "dx_biobanklist_level2_", replacement = "")) |>
-    mutate(gene = gsub(x = gene, pattern = "\\.", replacement = " ")) |>
-    mutate(gene = gsub(x = gene, pattern = "opticus neuritis", replacement = "optic neuritis"))
-
-# disease enrichment manual for ICD dementia ---
-combined_dx_biobanklist_level2_matrix_dementia <-
-  combined_complete_norm |>
-  dplyr::filter(dx_icd_level2 == "dementia") |>
-  dplyr::select(dx_biobanklist_level2) |>
-  recipes::recipe(dx_biobanklist_level2 ~ .) |>
-  recipes::step_dummy(dx_biobanklist_level2) |>
-  recipes::prep() |>
-  recipes::bake(new_data = NULL) |>
-  as.matrix() |>
-  t()
-
-rownames(combined_dx_biobanklist_level2_matrix_dementia) <- gsub(x = rownames(combined_dx_biobanklist_level2_matrix_dementia), pattern = "\\.", replacement = " ")
-
-seu_csf_train_dementia <- subset(seu_csf_train, subset = dx_icd_level2 == "dementia")
-dplyr::count(seu_csf_train_dementia@meta.data, dx_icd_level2)
-
-abundance_combined_soupx_csf_biobanklist_level2_dementia <-
-    SoupX::quickMarkers(combined_dx_biobanklist_level2_matrix_dementia, seu_csf_train_dementia$cluster, FDR = 0.1, N = 100, expressCut = 0.9) |>
-    tibble() |>
-    mutate(gene = gsub(x = gene, pattern = "dx_biobanklist_level2_", replacement = "")) |>
-    mutate(gene = gsub(x = gene, pattern = "\\.", replacement = " ")) |>
-    mutate(gene = gsub(x = gene, pattern = "opticus neuritis", replacement = "optic neuritis"))
-
-lapply(unique(seu_csf_train$cluster), abundanceCategoryPlot, data = abundance_combined_soupx_csf_biobanklist_level2_dementia)
