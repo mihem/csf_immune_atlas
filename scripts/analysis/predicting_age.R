@@ -110,7 +110,7 @@ show_best(res_model, "rsq")
 
 xgb_best <-
   res_model |>
-  select_best("rmse")
+  select_best(metric = "rmse")
   # select_best("rsq")
 
 qs::qsave(res_model, file.path("analysis", "relative", "models", "age_combined_xgb_model.qs"))
@@ -127,6 +127,12 @@ last_fit <-
   )
 
 final_metric <- collect_metrics(last_fit)
+
+# calculcate pearson correlation
+last_fit |>
+  collect_predictions() |>
+  select(.pred, age) |>
+  cor(method = "pearson")
 
 last_fit |>
   tune::collect_predictions() |>
@@ -161,3 +167,7 @@ last_fit |>
   theme(legend.position = "none")
 
 ggsave(file.path("analysis", "relative", "models", "age_combined_xgb_vip.pdf"), width = 4, height = 2)
+
+
+library(yardstick)
+library(dplyr)
