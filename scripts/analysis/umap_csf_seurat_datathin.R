@@ -356,57 +356,6 @@ hmap_seurat <-
 
 ggsave(plot = hmap_seurat, file.path("analysis", "relative", "top", "hmap_seurat_csf_norm_train.pdf"), width = 10, height = 4)
 
-# # adjust age ----
-# vars_regress <- 
-#     data.frame(t(as.matrix(seu_csf_train$RNA$data))) |>
-#     names()
-
-# seu_csf_train_regress_age_data <-
-#     data.frame(t(as.matrix(seu_csf_train$RNA$data))) |>
-#     mutate(age = combined_complete_norm$age) |>
-#     datawizard::adjust(effect = c("age"), select = vars_regress, keep_intercept = TRUE)
-
-
-# colnames(seu_csf_train_regress_age_data) <- gsub(x = colnames(seu_csf_train_regress_age_data), pattern = "\\.", replacement = "-")
-
-# seu_csf_train_regress_age <- Seurat::CreateSeuratObject(t(seu_csf_train_regress_age_data))
-# seu_csf_train_regress_age$RNA$data <- seu_csf_train_regress_age$RNA$counts
-# Idents(seu_csf_train_regress_age) <- seu_csf_train$cluster
-
-# hmap_seurat_regress <-
-#     AverageExpression(seu_csf_train_regress_age, features = seu_markers_csf$var) |>
-#     data.frame() |>
-#     rownames_to_column("var") |>
-#     pivot_longer(cols = -var, names_to = "cluster") |>
-#     mutate(cluster = gsub(x = cluster, pattern = "RNA.", replacement = "")) |>
-#     mutate(cluster = gsub(x = cluster, pattern = "\\.", replacement = " "))  |>
-#     left_join(seu_markers_csf, by = c("var", "cluster")) |> # combine with statistics
-#     dplyr::filter(!is.na(p_val)) |> # remove if below threshold defined above, so no statistics
-#     dplyr::select(var, cluster, value) |>
-#     pivot_wider(names_from = "cluster", values_from = "value", values_fill = 0) |>
-#     mutate(var = gsub(x = var, pattern = "-", replacement = "_")) |>
-#     mutate(var = gsub(x = var, pattern = "_", replacement = " ")) |>
-#     mutate(var = gsub(x = var, pattern = "basic", replacement = "routine")) |>
-#     column_to_rownames("var") |>
-#     t() |>
-#     pheatmap(
-#         scale = "column",
-#         border_color = NA,
-#         cluster_rows = TRUE,
-#         color = phmap_colors,
-#         # color = viridis(n = 100),
-#         cellwidth = 10,
-#         cellheight = 10,
-#         treeheight_col = 10,
-#         treeheight_row = 10,
-#         cutree_cols =  7,
-#         clustering_distance_cols = "euclidean",
-#         clustering_distance_rows = "euclidean",
-#         clustering_method = "ward.D2",
-#     )
-
-# ggsave(plot = hmap_seurat_regress, file.path("analysis", "relative", "top", "hmap_seurat_csf_norm_regress_age.pdf"), width = 10, height = 4)
-
 # plot age in UMAP ----
 fplot_age <-
     Embeddings(seu_csf_train, "umap") |>
