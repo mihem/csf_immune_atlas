@@ -25,12 +25,6 @@ phmap_colors <- colorRampPalette(rev(brewer.pal(n = 8, name = "RdBu")))(100) #ni
 # read in prepared data for analysis ----
 combined_complete_norm <- qs::qread("final_one_rel_combined_norm_complete.qs")
 
-seu_data_csf <-
-    combined_complete_norm |>
-    dplyr::select(granulos_CSF:lactate_CSF) |>
-    dplyr::select(matches("CSF|ratio")) |>
-    t()
-
 # finding the right distribution ----
 fitdistrplus::descdist(combined_complete_norm$granulos_CSF)
 fitdistrplus::descdist(combined_complete_norm$cell_count_CSF)
@@ -361,3 +355,88 @@ hmap_seurat <-
     )
 
 ggsave(plot = hmap_seurat, file.path("analysis", "relative", "top", "hmap_seurat_csf_norm_train.pdf"), width = 10, height = 4)
+
+# # adjust age ----
+# vars_regress <- 
+#     data.frame(t(as.matrix(seu_csf_train$RNA$data))) |>
+#     names()
+
+# seu_csf_train_regress_age_data <-
+#     data.frame(t(as.matrix(seu_csf_train$RNA$data))) |>
+#     mutate(age = combined_complete_norm$age) |>
+#     datawizard::adjust(effect = c("age"), select = vars_regress, keep_intercept = TRUE)
+
+
+# colnames(seu_csf_train_regress_age_data) <- gsub(x = colnames(seu_csf_train_regress_age_data), pattern = "\\.", replacement = "-")
+
+# seu_csf_train_regress_age <- Seurat::CreateSeuratObject(t(seu_csf_train_regress_age_data))
+# seu_csf_train_regress_age$RNA$data <- seu_csf_train_regress_age$RNA$counts
+# Idents(seu_csf_train_regress_age) <- seu_csf_train$cluster
+
+# hmap_seurat_regress <-
+#     AverageExpression(seu_csf_train_regress_age, features = seu_markers_csf$var) |>
+#     data.frame() |>
+#     rownames_to_column("var") |>
+#     pivot_longer(cols = -var, names_to = "cluster") |>
+#     mutate(cluster = gsub(x = cluster, pattern = "RNA.", replacement = "")) |>
+#     mutate(cluster = gsub(x = cluster, pattern = "\\.", replacement = " "))  |>
+#     left_join(seu_markers_csf, by = c("var", "cluster")) |> # combine with statistics
+#     dplyr::filter(!is.na(p_val)) |> # remove if below threshold defined above, so no statistics
+#     dplyr::select(var, cluster, value) |>
+#     pivot_wider(names_from = "cluster", values_from = "value", values_fill = 0) |>
+#     mutate(var = gsub(x = var, pattern = "-", replacement = "_")) |>
+#     mutate(var = gsub(x = var, pattern = "_", replacement = " ")) |>
+#     mutate(var = gsub(x = var, pattern = "basic", replacement = "routine")) |>
+#     column_to_rownames("var") |>
+#     t() |>
+#     pheatmap(
+#         scale = "column",
+#         border_color = NA,
+#         cluster_rows = TRUE,
+#         color = phmap_colors,
+#         # color = viridis(n = 100),
+#         cellwidth = 10,
+#         cellheight = 10,
+#         treeheight_col = 10,
+#         treeheight_row = 10,
+#         cutree_cols =  7,
+#         clustering_distance_cols = "euclidean",
+#         clustering_distance_rows = "euclidean",
+#         clustering_method = "ward.D2",
+#     )
+
+# ggsave(plot = hmap_seurat_regress, file.path("analysis", "relative", "top", "hmap_seurat_csf_norm_regress_age.pdf"), width = 10, height = 4)
+
+# plot age in UMAP ----
+fplot_age <-
+    Embeddings(seu_csf_train, "umap") |>
+    bind_cols(age = combined_complete_norm$age) |>
+    ggplot(aes(x = umap_1, y = umap_2, color = age)) +
+    geom_point(size = .5, alpha = .5) +
+    viridis::scale_color_viridis() +
+    labs(x = "UMAP1", y = "UMAP2") +
+    theme_classic() +
+    theme(
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        axis.title.x = element_text(size = 15),
+        axis.title.y = element_text(size = 15),
+        panel.border = element_rect(color = "black", linewidth = 1, fill = NA),
+        aspect.ratio = 1,
+    )
+
+ggsave(plot = fplot_age, filename = file.path("analysis", "relative", "feature", "fplot_csf_datathin_age.png"), width = 3, height = 3)
+
+# visualize age per cluster ----    
+bplot_age <-
+    tibble(cluster = seu_csf_train$cluster) |>
+    bind_cols(age = combined_complete_norm$age) |>
+    ggplot(aes(x = cluster, y = age, fill = cluster)) +
+    geom_boxplot() +
+    xlab("") +
+    theme_bw() +
+    theme(legend.position = "none") +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.3)) + 
+    scale_fill_manual(values = seu_csf_train@misc$cluster_col)
+
+ggsave(plot = bplot_age, filename = file.path("analysis", "relative", "boxplots", "bplot_csf_datathin_age.pdf"), width = 2, height = 3)
