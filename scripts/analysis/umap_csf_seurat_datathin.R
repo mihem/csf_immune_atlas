@@ -432,11 +432,11 @@ bplot_age <-
     tibble(cluster = seu_csf_train$cluster) |>
     bind_cols(age = combined_complete_norm$age) |>
     ggplot(aes(x = cluster, y = age, fill = cluster)) +
-    geom_boxplot() +
+    geom_violin() +
     xlab("") +
     theme_bw() +
     theme(legend.position = "none") +
     theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.3)) + 
     scale_fill_manual(values = seu_csf_train@misc$cluster_col)
 
-ggsave(plot = bplot_age, filename = file.path("analysis", "relative", "boxplots", "bplot_csf_datathin_age.pdf"), width = 2, height = 3)
+ggsave(plot = bplot_age, filename = file.path("analysis", "relative", "boxplots", "violin_csf_datathin_age.pdf"), width = 2, height = 3)
