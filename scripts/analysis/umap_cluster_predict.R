@@ -21,23 +21,23 @@ test_data <- as.data.frame(t(as.matrix(Seurat::GetAssayData(seu_csf_test, layer 
 train_data$cluster <- seu_csf_train$cluster
 test_data$cluster <- seu_csf_train$cluster
 
-# alternatively, only ms
-seu_csf_train_ms <- subset(seu_csf_train, subset = dx_icd_level2 %in% c("multiple sclerosis"))
-seu_csf_test_ms <- subset(seu_csf_test, subset = dx_icd_level2 %in% c("multiple sclerosis"))
-train_data <- as.data.frame(t(as.matrix(Seurat::GetAssayData(seu_csf_train_ms, layer = "counts"))))
-test_data <- as.data.frame(t(as.matrix(Seurat::GetAssayData(seu_csf_test_ms, layer = "counts"))))
-train_data$cluster <- seu_csf_train_ms$cluster
-train_data$cluster <- ifelse(train_data$cluster == "cl2", "MS in MS cluster", "MS in other cluster")
-test_data$cluster <- train_data$cluster
+# # alternatively, only ms
+# seu_csf_train_ms <- subset(seu_csf_train, subset = dx_icd_level2 %in% c("multiple sclerosis"))
+# seu_csf_test_ms <- subset(seu_csf_test, subset = dx_icd_level2 %in% c("multiple sclerosis"))
+# train_data <- as.data.frame(t(as.matrix(Seurat::GetAssayData(seu_csf_train_ms, layer = "counts"))))
+# test_data <- as.data.frame(t(as.matrix(Seurat::GetAssayData(seu_csf_test_ms, layer = "counts"))))
+# train_data$cluster <- seu_csf_train_ms$cluster
+# train_data$cluster <- ifelse(train_data$cluster == "cl2", "MS in MS cluster", "MS in other cluster")
+# test_data$cluster <- train_data$cluster
 
-# alternatively, only dementia
-seu_csf_train_dementia <- subset(seu_csf_train, subset = dx_icd_level2 %in% c("dementia"))
-seu_csf_test_dementia <- subset(seu_csf_test, subset = dx_icd_level2 %in% c("dementia"))
-train_data <- as.data.frame(t(as.matrix(Seurat::GetAssayData(seu_csf_train_dementia, layer = "counts"))))
-test_data <- as.data.frame(t(as.matrix(Seurat::GetAssayData(seu_csf_test_dementia, layer = "counts"))))
-train_data$cluster <- seu_csf_train_dementia$cluster
-train_data$cluster <- ifelse(train_data$cluster == "cl1", "dementia in dementia cluster", "dementia in other cluster")
-test_data$cluster <- train_data$cluster
+# # alternatively, only dementia
+# seu_csf_train_dementia <- subset(seu_csf_train, subset = dx_icd_level2 %in% c("dementia"))
+# seu_csf_test_dementia <- subset(seu_csf_test, subset = dx_icd_level2 %in% c("dementia"))
+# train_data <- as.data.frame(t(as.matrix(Seurat::GetAssayData(seu_csf_train_dementia, layer = "counts"))))
+# test_data <- as.data.frame(t(as.matrix(Seurat::GetAssayData(seu_csf_test_dementia, layer = "counts"))))
+# train_data$cluster <- seu_csf_train_dementia$cluster
+# train_data$cluster <- ifelse(train_data$cluster == "cl1", "dementia in dementia cluster", "dementia in other cluster")
+# test_data$cluster <- train_data$cluster
 
 #build the model ----
 xgb_model <- 
@@ -90,10 +90,8 @@ autoplot(res_model, metric = "bal_accuracy")
 collect_metrics(res_model)
 
 qs::qsave(res_model, file.path("analysis", "relative", "models", "cluster_xgb_model_datathin_res_0_5.qs"))
-qs::qsave(res_model, file.path("analysis", "relative", "models", "cluster_xgb_model_datathin_ms.qs"))
-qs::qsave(res_model, file.path("analysis", "relative", "models", "cluster_xgb_model_datathin_dementia.qs"))
-
-res_model <- qread(file.path("analysis", "relative", "models", "cluster_xgb_model_datathin_res_0_5.qs"))
+# qs::qsave(res_model, file.path("analysis", "relative", "models", "cluster_xgb_model_datathin_ms.qs"))
+# qs::qsave(res_model, file.path("analysis", "relative", "models", "cluster_xgb_model_datathin_dementia.qs"))
 
 xgb_best <-
   res_model |>
