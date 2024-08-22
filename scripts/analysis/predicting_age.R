@@ -22,7 +22,7 @@ combined_fil <-
   
 vars_sel <-
   combined_fil |>
-  select(granulos_CSF:lactate_CSF) |>
+  dplyr::select(granulos_CSF:lactate_CSF) |>
   names()
 
 combined_data_ctrl <-
