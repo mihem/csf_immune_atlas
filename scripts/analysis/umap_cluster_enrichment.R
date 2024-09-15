@@ -90,55 +90,6 @@ ggsave(
     height = 5
 )
 
-# MS scores -----
-ms_prospective_join <- qs::qread("ms_prospective_join.qs")
-
-unique(ms_prospective_join$pid)
-ms_prospective_plot_autoimmune <-
-    ms_prospective_join |>
-    mutate(pid = as.character(pid)) |>
-    dplyr::filter(interval <= 100) |>
-    dplyr::filter(cluster %in% c("CNS autoimmune")) |>
-    ggplot(aes(x = interval, y = edss_gesamt)) +
-    geom_point(aes(color = pid)) +
-    geom_line(aes(color = pid)) +
-    geom_smooth(method = "loess") +
-    theme_bw() +
-    xlab("") + 
-    ylim(0, 10) +
-    theme(legend.position = "none") + 
-    scale_color_manual(values = my_cols)
-
-ggsave(
- filename = file.path("analysis", "relative", "interval", "ms_prospective_plot_autoimmune.pdf"),
-    ms_prospective_plot_autoimmune,
-    width = 5,
-    height = 5
-)
-
-ms_prospective_plot_not_autoimmune <-
-    ms_prospective_join |>
-    mutate(pid = as.character(pid)) |>
-    dplyr::filter(interval <= 100)  |>
-    dplyr::filter(!cluster %in% c("CNS autoimmune")) |>
-    # dplyr::filter(cluster %in% c("CNS neurodegenerative", "neurodegenerative")) |>
-    ggplot(aes(x = interval, y = edss_gesamt)) +
-    geom_point(aes(color = pid)) +
-    geom_line(aes(color = pid)) +
-    geom_smooth(method = "loess") +
-    theme_bw() +
-    xlab("") + 
-    ylim(0, 10) +
-    theme(legend.position = "none") + 
-    scale_color_manual(values = my_cols)
-
-ggsave(
- filename = file.path("analysis", "relative", "interval", "ms_prospective_plot_not_autoimmune.pdf"),
-    ms_prospective_plot_not_autoimmune,
-    width = 5,
-    height = 5
-)
-
 # disease enrichment manual for ICD dementia ---
 combined_dx_biobanklist_level2_matrix_dementia <-
   combined_complete_norm |>
