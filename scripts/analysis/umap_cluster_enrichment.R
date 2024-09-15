@@ -60,12 +60,10 @@ abundance_combined_soupx_csf_biobanklist_level2_ms <-
 # MS EDSS -----
 ms_psa_join <- qs::qread("ms_psa_join.qs")
 
-count(ms_psa_join, cluster)
-
 ms_psa_edss_plot_stat <-
     ms_psa_join |>
     dplyr::mutate(cluster = if_else(cluster == "CNS autoimmune", "CNS autoimmune", "other")) |>
-    t.test(formula = edss ~ cluster, data = _) |>
+    wilcox.test(formula = edss ~ cluster, data = _) |>
     broom::tidy() |>
     mutate(p.symbol = as.character(symnum(p.value, corr = FALSE, na = FALSE, cutpoints = c(0, 0.001, 0.01, 0.05, 1), symbols = c("***", "**", "*", " "))))
 
@@ -78,15 +76,18 @@ ms_psa_edss_plot <-
     dplyr::mutate(cluster = if_else(cluster == "CNS autoimmune", "CNS autoimmune", "other")) |>
     ggplot(aes(x = cluster, y = edss, fill = cluster)) +
     geom_boxplot() +
+    geom_jitter(width = 0.3, height = 0, size = .7, shape = 21, aes(fill = cluster)) +
     theme_bw() +
     xlab("") +
+    ylab("EDSS") +
     theme(legend.position = "none") +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
     ggsignif::geom_signif(comparisons = stats_list$comparisons, annotation = stats_list$annotation, textsize = 5, step_increase = 0.05, vjust = 0.7)
 
 ggsave(
  filename = file.path("analysis", "relative", "boxplots", "ms_psa_edss_plot.pdf"),
     ms_psa_edss_plot,
-    width = 5,
+    width = 2,
     height = 5
 )
 
