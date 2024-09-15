@@ -21,7 +21,14 @@ validation_filter_v1 <-
   validation_relative |>
   tidyr::drop_na(aufnahme, measure_date) |>
   dplyr::mutate(lp_interval = abs(as.double(difftime(measure_date, aufnahme, units = "days")))) |>
-  dplyr::filter(lp_interval < 8)
+  dplyr::filter(lp_interval < 8) |>
+  mutate(OCB = case_when(
+    OCB == "1" ~ 0,
+    OCB == "2" ~ 1,
+    OCB == "3" ~ 1,
+    OCB == "4" ~ 0,
+    OCB == "5" ~ 0
+  ))
 
 # section filter data ------------------------------------------
 ggplot(validation_filter_v1, aes(x = harvest_volume, y = events, color = tissue)) +
