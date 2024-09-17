@@ -9,6 +9,7 @@ options(tidymodels.dark = TRUE)
 # source utility functions ----
 source("scripts/analysis/ml_izkf_utils.R")
 
+
 # load final xgb model ----
 xgb_model <- qs::qread(file.path("analysis", "relative", "models", "cluster_xgb_model_datathin_res_0_5_final.qs"))
 
@@ -19,6 +20,9 @@ validation_combined <-  qs::qread("final_one_rel_combined_validation.qs")
 validation_combined <-
     validation_combined |>
     drop_na(granulos_CSF, cell_count_CSF) 
+
+# plot validation data
+plot_category(data = validation_combined, category = "dx_icd_level2", width = 7, height = 7)
 
 # Replace "_" with "-" in column names to match xgb model
 pred_cluster <-

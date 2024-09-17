@@ -114,7 +114,8 @@ plot_category <- function(data, category, width, height) {
             axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)
         ) +
         coord_flip()
-    ggsave(file.path("analysis", "relative", "categories", glue::glue("count_{category}.pdf")), width = width, height = height, device = cairo_pdf)
+        data_quo <- deparse(substitute(data))
+    ggsave(file.path("analysis", "relative", "categories", glue::glue("count_{category}_{data_quo}.pdf")), width = width, height = height, device = cairo_pdf)
 }
 
 #function to create csf heatmap for grouped mean
