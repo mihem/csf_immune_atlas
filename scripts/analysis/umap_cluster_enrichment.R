@@ -38,6 +38,7 @@ combined_dx_biobanklist_level2_matrix_ms <-
   combined_complete_norm |>
   dplyr::filter(dx_icd_level2 == "multiple sclerosis") |>
   dplyr::select(dx_biobanklist_level2) |>
+  drop_na() |>
   recipes::recipe(dx_biobanklist_level2 ~ .) |>
   recipes::step_dummy(dx_biobanklist_level2) |>
   recipes::prep() |>
@@ -47,15 +48,21 @@ combined_dx_biobanklist_level2_matrix_ms <-
 
 rownames(combined_dx_biobanklist_level2_matrix_ms) <- gsub(x = rownames(combined_dx_biobanklist_level2_matrix_ms), pattern = "\\.", replacement = " ")
 
-seu_csf_train_ms <- subset(seu_csf_train, subset = dx_icd_level2 == "multiple sclerosis")
-dplyr::count(seu_csf_train_ms@meta.data, dx_icd_level2)
+patients_ms_cluster <-
+    combined_complete_norm |>
+    mutate(cluster = seu_csf_train$cluster) |>
+    dplyr::filter(dx_icd_level2 == "multiple sclerosis") |>
+    drop_na(dx_biobanklist_level2) |>
+    pull(cluster)
 
 abundance_combined_soupx_csf_biobanklist_level2_ms <-
-    SoupX::quickMarkers(combined_dx_biobanklist_level2_matrix_ms, seu_csf_train_ms$cluster, FDR = 0.1, N = 100, expressCut = 0.9) |>
+    SoupX::quickMarkers(combined_dx_biobanklist_level2_matrix_ms, patients_ms_cluster, FDR = 0.1, N = 100, expressCut = 0.9) |>
     tibble() |>
     mutate(gene = gsub(x = gene, pattern = "dx_biobanklist_level2_", replacement = "")) |>
     mutate(gene = gsub(x = gene, pattern = "\\.", replacement = " ")) |>
     mutate(gene = gsub(x = gene, pattern = "opticus neuritis", replacement = "optic neuritis"))
+
+lapply(unique(seu_csf_train$cluster), abundanceCategoryPlot, data = abundance_combined_soupx_csf_biobanklist_level2_ms)
 
 # MS EDSS -----
 ms_psa_join <- qs::qread("ms_psa_join.qs")
@@ -92,31 +99,71 @@ ggsave(
 )
 
 # disease enrichment manual for ICD dementia ---
-combined_dx_biobanklist_level2_matrix_dementia <-
-  combined_complete_norm |>
-  dplyr::filter(dx_icd_level2 == "dementia") |>
-  dplyr::select(dx_biobanklist_level2) |>
-  recipes::recipe(dx_biobanklist_level2 ~ .) |>
-  recipes::step_dummy(dx_biobanklist_level2) |>
-  recipes::prep() |>
-  recipes::bake(new_data = NULL) |>
-  as.matrix() |>
-  t()
+patients_cluster_dementia_manual_merge <- qs::qread("patients_cluster_dementia_manual_merge.qs")
 
-rownames(combined_dx_biobanklist_level2_matrix_dementia) <- gsub(x = rownames(combined_dx_biobanklist_level2_matrix_dementia), pattern = "\\.", replacement = " ")
+patients_cluster_dementia_manual_complete <- 
+    patients_cluster_dementia_manual_merge |>
+    drop_na(subtype)
 
-seu_csf_train_dementia <- subset(seu_csf_train, subset = dx_icd_level2 == "dementia")
-dplyr::count(seu_csf_train_dementia@meta.data, dx_icd_level2)
+# patients_cluster_dementia_manual_complete <- 
+#     patients_cluster_dementia_manual_merge |>
+#     drop_na(subtype)
+
+# patients_cluster_dementia_manual_top_subtypes <- 
+#     patients_cluster_dementia_manual_merge |>
+#     count(subtype) |>
+#     drop_na() |>
+#     slice_max(order_by = n, n = 3) |>
+#     pull(subtype)
+
+# patients_cluster_dementia_manual_top <-
+#     patients_cluster_dementia_manual_merge |>
+#     dplyr::filter(subtype %in% patients_cluster_dementia_manual_top_subtypes)
+
+# patients_cluster_dementia_manual <-
+#     patients_cluster_dementia_manual_complete |>
+#     dplyr::filter(source == "manual")
+
+patients_cluster_dementia_manual_matrix <-
+    patients_cluster_dementia_manual  |>
+    dplyr::select(subtype) |>
+    recipes::recipe(subtype ~ .) |>
+    recipes::step_dummy(subtype) |>
+    recipes::prep() |>
+    recipes::bake(new_data = NULL) |>
+    as.matrix() |>
+    t()
+
+rownames(patients_cluster_dementia_manual_matrix) <- gsub(x = rownames(patients_cluster_dementia_manual_matrix), pattern = "\\.", replacement = " ")
 
 abundance_combined_soupx_csf_biobanklist_level2_dementia <-
-    SoupX::quickMarkers(combined_dx_biobanklist_level2_matrix_dementia, seu_csf_train_dementia$cluster, FDR = 0.1, N = 100, expressCut = 0.9) |>
+    SoupX::quickMarkers(patients_cluster_dementia_manual_matrix, patients_cluster_dementia_manual_complete$cluster, FDR = 0.1, N = 100, expressCut = 0.9)  |>
     tibble() |>
     mutate(gene = gsub(x = gene, pattern = "dx_biobanklist_level2_", replacement = "")) |>
     mutate(gene = gsub(x = gene, pattern = "\\.", replacement = " ")) |>
     mutate(gene = gsub(x = gene, pattern = "opticus neuritis", replacement = "optic neuritis"))
 
-lapply(unique(seu_csf_train$cluster), abundanceCategoryPlot, data = abundance_combined_soupx_csf_biobanklist_level2_dementia)
+# no enrichment
 
+# number of dementia patients per cluster ----
+patients_dementia_plot <-
+    patients_cluster_dementia_manual_complete |>
+    mutate(subtype = reorder(subtype, table(subtype)[subtype])) |>
+    ggplot(aes(x = cluster, y = subtype, color = cluster)) +
+    geom_count() +
+    theme_classic() +
+    xlab("") +
+    ylab("") +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
+    guides(color = "none") + 
+    scale_color_manual(values = seu_csf_train@misc$cluster_col)
+
+ggsave(
+    filename = file.path("analysis", "relative", "abundance", "patients_dementia_plot.pdf"),
+    patients_dementia_plot,
+    width = 4,
+    height = 6
+)
 
 # read in neuropsychology data ---
 np_dementia <- qs::qread("np_dementia.qs")
@@ -129,7 +176,6 @@ dementia_patients <-
     select(pid, cluster, measure_date)
 
 # join patients with neuropsychology data ----
-
 top_np_item <-
     np_dementia |>
     count(test) |>
