@@ -15,6 +15,8 @@ options(tidymodels.dark = TRUE)
 seu_csf_train <- qread("seu_csf_train.qs")
 seu_csf_test <- qread("seu_csf_test.qs")
 
+source("scripts/analysis/ml_izkf_utils.R")
+
 # all data ----
 train_data <- as.data.frame(t(as.matrix(Seurat::GetAssayData(seu_csf_train, layer = "counts"))))
 test_data <- as.data.frame(t(as.matrix(Seurat::GetAssayData(seu_csf_test, layer = "counts"))))
@@ -120,21 +122,6 @@ qs::qsave(last_fit, file.path("analysis", "relative", "models", "cluster_xgb_mod
 qs::qsave(last_fit, file.path("analysis", "relative", "models", "cluster_xgb_model_datathin_ms_final.qs"))
 qs::qsave(last_fit, file.path("analysis", "relative", "models", "cluster_xgb_model_datathin_dementia_final.qs"))
 
-# function to plot confusion matrix ----
-plotConfMat <- function(last_fit, name) {
-  collect_predictions(last_fit) |> # nolint
-    conf_mat(truth = cluster, estimate = .pred_class) |> # nolint
-    autoplot(type = "heatmap") +
-    # scale_fill_distiller(palette = "RdBu") +
-    viridis::scale_fill_viridis() +
-    # scale_fill_gradient(low = "blue", high = "red") +
-    ggtitle(glue::glue("{name}
-     ROC AUC {signif(final_metric$.estimate,2)[4]},
-     BACC {signif(final_metric$.estimate,2)[2]}")) +
-    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.3))
-  ggsave(file.path("analysis", "relative", "models", glue::glue("{name}_xgb_conf_mat.pdf")), width = 5, height = 5)
-}
-
 plotConfMat(last_fit, "cluster_xgb_model_datathin_res_0_5")
 plotConfMat(last_fit, "cluster_xgb_model_datathin_ms")
 plotConfMat(last_fit, "cluster_xgb_model_datathin_dementia")
@@ -177,16 +164,6 @@ lookup_clusters <-
 
 predictions <- last_fit  |>
   collect_predictions() 
-
-# Function to calculate one-vs-all ROC AUC
-calculate_roc_auc <- function(data, class) {
-  pred_class <- paste0(".pred_", class)
-  predictions <- data  |>
-    mutate(truth_binary = factor(ifelse(cluster == class, 1, 0)))  |>
-    mutate(pred_binary = 1 - .data[[pred_class]])
-
-  roc_auc(predictions, truth = truth_binary, pred_binary)
-}
 
 cluster_names <- c("cl0", "cl1", "cl2", "cl3", "cl4", "cl5")
 

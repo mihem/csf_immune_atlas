@@ -14,6 +14,8 @@ all_data_one_fil <- qs::qread("final_one_rel.qs")
 csf_data <- all_data_one_fil$csf
 blood_data <- all_data_one_fil$blood
 
+source("scripts/analysis/ml_izkf_utils.R")
+
 #csf
 csf_data_mice <- select(csf_data, dx_icd_level1:dx_andi_level3, patient_id:lactate, sex, age)
 
@@ -311,15 +313,6 @@ comparison_only_blood <-
   mutate(group = ifelse(is.na(group), "blood_only", "CSF_blood"))
 
 dplyr::count(comparison_only_blood, group)
-
-compBoxplot <- function(par) {
-  comparison_only_blood |>
-    ggplot(aes(x = group, y = .data[[par]], fill = group)) +
-    geom_boxplot() +
-    theme_bw() +
-    xlab("") + 
-    theme(legend.position = "none") 
-}
 
 vars_compare <-
   comparison_only_blood |>

@@ -124,47 +124,7 @@ seu_blood_test <-
 qsave(seu_blood_test, "seu_blood_test.qs")
 
 
-# stability metric to determine best resolution
-stabilityFun <- function(t) {
-    set.seed(t)
-    data_thin <- datathin(combined_complete_norm[blood_vars_cont], family = "normal", K = 2, arg = variance_datathin)
-    data_train <- data_thin[, , 1]
-    data_test <- data_thin[, , 2]
-    seu_blood_train <- Seurat::CreateSeuratObject(t(data_train))
-    seu_blood_test <- Seurat::CreateSeuratObject(t(data_test))
-    seu_blood_train$RNA$data <- seu_blood_train$RNA$counts
-    seu_blood_test$RNA$data <- seu_blood_test$RNA$counts
-    seu_blood_train <-
-        seu_blood_train |>
-        Seurat::FindVariableFeatures() |>
-        Seurat::ScaleData() |>
-        Seurat::RunPCA() |>
-        Seurat::FindNeighbors(dims = 1:20)
-    seu_blood_test <-
-        seu_blood_test |>
-        Seurat::FindVariableFeatures() |>
-        Seurat::ScaleData() |>
-        Seurat::RunPCA() |>
-        Seurat::FindNeighbors(dims = 1:20)
-    resRange <- seq(0.2, 1.2, by = 0.1)
-    resNames <- paste0("RNA_snn_res.", resRange)
-    for (res in resRange) {
-        seu_blood_train <- FindClusters(seu_blood_train, resolution = res)
-    }
-    for (res in resRange) {
-        seu_blood_test <- FindClusters(seu_blood_test, resolution = res)
-    }
-    stability_res <- list()
-    for (k in resNames) {
-        stability_res[k] <- mclust::adjustedRandIndex(
-            seu_blood_train@meta.data[[k]],
-            seu_blood_test@meta.data[[k]]
-        )
-    }
-    return(unlist(stability_res))
-}
-
-stability_res <- map_dfr(1:10, stabilityFun)
+stability_res <- map_dfr(1:10, stabilityFunBlood)
 
 # plot stability metric ----
 stability_df <-

@@ -8,21 +8,7 @@ library(patchwork)
 
 # read in data ---
 combined_complete_time <- qread("combined_complete_time.qs")
-
-TimePlot <- function(data, var, size, span) {
-    mean <- mean(data[[var]], na.rm = TRUE)
-    plot <-
-        data |>
-        ggplot(aes(x = measure_time, y = .data[[var]])) +
-        geom_point(alpha = 0.3, size = size) +
-        theme_bw() +
-        xlab("") +
-        ylab("") +
-        geom_smooth(method = "loess", se = TRUE, span = span, fill = "#FA8A63", color = "#FE162A") +
-        ggtitle(var) +
-        geom_hline(yintercept = mean, linetype = "dashed", color = "blue")
-    return(plot)
-}
+source("scripts/analysis/ml_izkf_utils.R")
 
 vars_time <-
     combined_complete_time |>
