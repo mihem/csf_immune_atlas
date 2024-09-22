@@ -374,7 +374,7 @@ fplot_age <-
         aspect.ratio = 1,
     )
 
-ggsave(plot = fplot_age, filename = file.path("analysis", "relative", "feature", "fplot_csf_datathin_age.png"), width = 3, height = 3)
+ggsave(plot = fplot_age, filename = file.path("analysis", "relative", "feature", "fplot_csf_datathin_age.pdf"), width = 3, height = 3)
 
 # visualize age per cluster ----    
 bplot_age <-
