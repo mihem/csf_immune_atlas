@@ -179,50 +179,7 @@ seu_csf_test <-
 
 qsave(seu_csf_test, "seu_csf_test.qs")
 
-# stability metric to determine best resolution
-stabilityFun <- function(t) {
-    set.seed(t)
-    data_thin1 <- datathin(combined_complete_norm[csf_vars_cont], family = "normal", K = 2, arg = variance_datathin)
-    set.seed(t)
-    data_thin2 <- datathin(combined_complete_norm[csf_vars_cat] + 1, family = "weibull", K = 2, arg = weibull_datathin)
-    data_thin <- abind::abind(data_thin1, data_thin2, along = 2)
-    data_train <- data_thin[, , 1]
-    data_test <- data_thin[, , 2]
-    seu_csf_train <- Seurat::CreateSeuratObject(t(data_train))
-    seu_csf_test <- Seurat::CreateSeuratObject(t(data_test))
-    seu_csf_train$RNA$data <- seu_csf_train$RNA$counts
-    seu_csf_test$RNA$data <- seu_csf_test$RNA$counts
-    seu_csf_train <-
-        seu_csf_train |>
-        Seurat::FindVariableFeatures() |>
-        Seurat::ScaleData() |>
-        Seurat::RunPCA() |>
-        Seurat::FindNeighbors(dims = 1:30)
-    seu_csf_test <-
-        seu_csf_test |>
-        Seurat::FindVariableFeatures() |>
-        Seurat::ScaleData() |>
-        Seurat::RunPCA() |>
-        Seurat::FindNeighbors(dims = 1:30)
-    resRange <- seq(0.2, 1.2, by = 0.1)
-    resNames <- paste0("RNA_snn_res.", resRange)
-    for (res in resRange) {
-        seu_csf_train <- FindClusters(seu_csf_train, resolution = res)
-    }
-    for (res in resRange) {
-        seu_csf_test <- FindClusters(seu_csf_test, resolution = res)
-    }
-    stability_res <- list()
-    for (k in resNames) {
-        stability_res[k] <- mclust::adjustedRandIndex(
-            seu_csf_train@meta.data[[k]],
-            seu_csf_test@meta.data[[k]]
-        )
-    }
-    return(unlist(stability_res))
-}
-
-stability_res <- map_dfr(1:10, stabilityFun)
+stability_res <- map_dfr(1:10, stabilityFunCSF)
 
 # plot stability metric ----
 stability_df <-

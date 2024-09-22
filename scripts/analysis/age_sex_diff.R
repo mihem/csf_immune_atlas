@@ -5,6 +5,7 @@ library(RColorBrewer)
 library(WRS2)
 
 combined_complete <- qread("final_one_rel_combined_complete.qs")
+source("scripts/analysis/ml_izkf_utils.R")
 
 # compare age and sex across somatoform ----
 combined_data_ctrl <-
@@ -58,24 +59,6 @@ combined_ctrl_regress_sex |>
 
 combined_ctrl_regress_age |>
   select(HLA_DR_CD8_blood)
-
-#function to calculcate correlation test for each variable with age ----
-# cor_fun <- function(data, var) {
-#     broom::tidy(cor.test(x = data[[var]], y = data[["age"]], use = "complete.obs", method = "spearman"))
-# }
-
-# function to scale variable ---
-scale_this <- function(x) {
-  (x - mean(x, na.rm = TRUE)) / sd(x, na.rm = TRUE)
-}
-
-#function to calculate the effect of the linear model ----
-lm_fun <- function(data, var) {
-  my_formula <- paste0(var, "~", "age")
-  result <- broom::tidy(lm(as.formula(my_formula), data = data)) 
-  result <- dplyr::filter(result, term == "age")
-  return(result)
-}
 
 # normalize the parameters ----
 combined_ctrl_regress_sex_norm <-
@@ -142,22 +125,6 @@ ggsave(file.path("analysis", "relative", "correlation", "correlation_age_regress
 
 # ggsave(file.path("analysis", "relative", "correlation", "correlation_age_regress_ctrl.pdf"), width = 5, height = 5)
 
-#individul correlation plots of top variables ----
-corrPlot <- function(var) {
-  result <- dplyr::filter(cor_age_regress_ctrl, var == {{ var }})
-  combined_ctrl_regress_sex_norm |>
-    ggplot2::ggplot(aes(x = age, y = .data[[var]])) +
-    ggplot2::geom_point(size = 0.1, alpha = 0.5) +
-    ggplot2::geom_smooth(method = "lm", se = TRUE) +
-    ggplot2::theme_bw() +
-    ggplot2::ylab("z score") +
-    ggplot2::labs(
-      title = var,
-      subtitle = paste0("coeff: ", signif(result$estimate, 2), ", adjusted p: ", signif(result$p_adjust, 2))
-    )
-  ggplot2::ggsave(file.path("analysis", "relative", "correlation", paste0("correlation_ctrl_age_regress_", var, ".pdf")), width = 4, height = 4)
-}
-
 age_var <- c("HLA_DR_CD4_CSF", "HLA_DR_CD8_blood", "albumin_ratio", "dn_T_blood")
 
 lapply(age_var, corrPlot)
@@ -169,15 +136,6 @@ shapiro.test(combined_complete$monos_CSF[1:5000])
 ggplot(combined_complete, aes(sample = monos_CSF))+
   stat_qq() +
   stat_qq_line()
-
-# function for  wilcox test and algina keselman and penfield effect size (robust version of cohen's d)
-my_wilcox_test <- function(data, var) {
-  my_formula <-  paste0(var, "~ sex")
-  akp_effect <- WRS2::akp.effect(as.formula(my_formula), data = data)
-  res <-  tidy(wilcox.test(as.formula(my_formula), data = data)) |>
-    dplyr::mutate(akp_effect = akp_effect$AKPeffect)
-  return(res)
-}
 
 stat_sex_regress_ctrl <-
   lapply(vars_cor, FUN = function(x) my_wilcox_test(data = combined_ctrl_regress_age, var = x)) |>
@@ -211,19 +169,6 @@ stat_sex_regress_ctrl |>
   scale_color_manual(values = c("yes" = brewer.pal(3, "Set1")[1], "no" = "black"))
 
 ggsave(file.path("analysis", "relative", "correlation", "stat_sex_regress_ctrl.pdf"), width = 5, height = 5)
-
-compSex <- function(var) {
-result <- dplyr::filter(stat_sex_regress_ctrl, var == {{ var }})
-combined_ctrl_regress_age |>
-  ggplot2::ggplot(aes(x = sex, y = .data[[var]])) +
-  ggplot2::geom_boxplot() +
-  ggplot2::theme_bw() +
-    ggplot2::labs(
-      title = var,
-      subtitle = paste0("effect: ", signif(result$akp_effect, 2), ", adjusted p: ", signif(result$p_adjust, 2))) +
-    ggplot2::ylab("")
-ggplot2::ggsave(file.path("analysis", "relative", "correlation", paste0("stat_sex_regress_", var, ".pdf")), width = 3, height = 4)
-}
 
 sex_vars <- c("T_blood", "albumin_CSF", "IgG_CSF")
 

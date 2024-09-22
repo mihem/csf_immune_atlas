@@ -469,3 +469,184 @@ LinePlot <- function(data_disease, data_control, par, xlim_end) {
     geom_hline(yintercept = median_par_control, linetype = "dashed", color = "blue")
     return(res_plot)
 }
+
+# function to calculate distance between dates
+date_distance_fun <- function(v1, v2, max_dist = 1) {
+    dist <- abs(as.double(difftime(v1, v2, units = "days")))
+    ret <- data.frame(include = (dist <= max_dist))
+    return(ret)
+}
+
+# function to scale variable ---
+scale_this <- function(x) {
+  (x - mean(x, na.rm = TRUE)) / sd(x, na.rm = TRUE)
+}
+
+#function to calculate the effect of the linear model ----
+lm_fun <- function(data, var) {
+  my_formula <- paste0(var, "~", "age")
+  result <- broom::tidy(lm(as.formula(my_formula), data = data)) 
+  result <- dplyr::filter(result, term == "age")
+  return(result)
+}
+
+#individul correlation plots of top variables ----
+corrPlot <- function(var) {
+  result <- dplyr::filter(cor_age_regress_ctrl, var == {{ var }})
+  combined_ctrl_regress_sex_norm |>
+    ggplot2::ggplot(aes(x = age, y = .data[[var]])) +
+    ggplot2::geom_point(size = 0.1, alpha = 0.5) +
+    ggplot2::geom_smooth(method = "lm", se = TRUE) +
+    ggplot2::theme_bw() +
+    ggplot2::ylab("z score") +
+    ggplot2::labs(
+      title = var,
+      subtitle = paste0("coeff: ", signif(result$estimate, 2), ", adjusted p: ", signif(result$p_adjust, 2))
+    )
+  ggplot2::ggsave(file.path("analysis", "relative", "correlation", paste0("correlation_ctrl_age_regress_", var, ".pdf")), width = 4, height = 4)
+}
+
+# function for  wilcox test and algina keselman and penfield effect size (robust version of cohen's d)
+my_wilcox_test <- function(data, var) {
+  my_formula <-  paste0(var, "~ sex")
+  akp_effect <- WRS2::akp.effect(as.formula(my_formula), data = data)
+  res <-  tidy(wilcox.test(as.formula(my_formula), data = data)) |>
+    dplyr::mutate(akp_effect = akp_effect$AKPeffect)
+  return(res)
+}
+
+compSex <- function(var) {
+result <- dplyr::filter(stat_sex_regress_ctrl, var == {{ var }})
+combined_ctrl_regress_age |>
+  ggplot2::ggplot(aes(x = sex, y = .data[[var]])) +
+  ggplot2::geom_boxplot() +
+  ggplot2::theme_bw() +
+    ggplot2::labs(
+      title = var,
+      subtitle = paste0("effect: ", signif(result$akp_effect, 2), ", adjusted p: ", signif(result$p_adjust, 2))) +
+    ggplot2::ylab("")
+ggplot2::ggsave(file.path("analysis", "relative", "correlation", paste0("stat_sex_regress_", var, ".pdf")), width = 3, height = 4)
+}
+
+compBoxplot <- function(par) {
+  comparison_only_blood |>
+    ggplot(aes(x = group, y = .data[[par]], fill = group)) +
+    geom_boxplot() +
+    theme_bw() +
+    xlab("") + 
+    theme(legend.position = "none") 
+}
+
+
+# stability metric to determine best resolution
+stabilityFunCSF <- function(t) {
+    set.seed(t)
+    data_thin1 <- datathin(combined_complete_norm[csf_vars_cont], family = "normal", K = 2, arg = variance_datathin)
+    set.seed(t)
+    data_thin2 <- datathin(combined_complete_norm[csf_vars_cat] + 1, family = "weibull", K = 2, arg = weibull_datathin)
+    data_thin <- abind::abind(data_thin1, data_thin2, along = 2)
+    data_train <- data_thin[, , 1]
+    data_test <- data_thin[, , 2]
+    seu_csf_train <- Seurat::CreateSeuratObject(t(data_train))
+    seu_csf_test <- Seurat::CreateSeuratObject(t(data_test))
+    seu_csf_train$RNA$data <- seu_csf_train$RNA$counts
+    seu_csf_test$RNA$data <- seu_csf_test$RNA$counts
+    seu_csf_train <-
+        seu_csf_train |>
+        Seurat::FindVariableFeatures() |>
+        Seurat::ScaleData() |>
+        Seurat::RunPCA() |>
+        Seurat::FindNeighbors(dims = 1:30)
+    seu_csf_test <-
+        seu_csf_test |>
+        Seurat::FindVariableFeatures() |>
+        Seurat::ScaleData() |>
+        Seurat::RunPCA() |>
+        Seurat::FindNeighbors(dims = 1:30)
+    resRange <- seq(0.2, 1.2, by = 0.1)
+    resNames <- paste0("RNA_snn_res.", resRange)
+    for (res in resRange) {
+        seu_csf_train <- FindClusters(seu_csf_train, resolution = res)
+    }
+    for (res in resRange) {
+        seu_csf_test <- FindClusters(seu_csf_test, resolution = res)
+    }
+    stability_res <- list()
+    for (k in resNames) {
+        stability_res[k] <- mclust::adjustedRandIndex(
+            seu_csf_train@meta.data[[k]],
+            seu_csf_test@meta.data[[k]]
+        )
+    }
+    return(unlist(stability_res))
+}
+
+# function to plot confusion matrix ----
+plotConfMat <- function(last_fit, name) {
+  collect_predictions(last_fit) |> # nolint
+    conf_mat(truth = cluster, estimate = .pred_class) |> # nolint
+    autoplot(type = "heatmap") +
+    # scale_fill_distiller(palette = "RdBu") +
+    viridis::scale_fill_viridis() +
+    # scale_fill_gradient(low = "blue", high = "red") +
+    ggtitle(glue::glue("{name}
+     ROC AUC {signif(final_metric$.estimate,2)[4]},
+     BACC {signif(final_metric$.estimate,2)[2]}")) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.3))
+  ggsave(file.path("analysis", "relative", "models", glue::glue("{name}_xgb_conf_mat.pdf")), width = 5, height = 5)
+}
+
+# stability metric to determine best resolution
+stabilityFunBlood <- function(t) {
+    set.seed(t)
+    data_thin <- datathin(combined_complete_norm[blood_vars_cont], family = "normal", K = 2, arg = variance_datathin)
+    data_train <- data_thin[, , 1]
+    data_test <- data_thin[, , 2]
+    seu_blood_train <- Seurat::CreateSeuratObject(t(data_train))
+    seu_blood_test <- Seurat::CreateSeuratObject(t(data_test))
+    seu_blood_train$RNA$data <- seu_blood_train$RNA$counts
+    seu_blood_test$RNA$data <- seu_blood_test$RNA$counts
+    seu_blood_train <-
+        seu_blood_train |>
+        Seurat::FindVariableFeatures() |>
+        Seurat::ScaleData() |>
+        Seurat::RunPCA() |>
+        Seurat::FindNeighbors(dims = 1:20)
+    seu_blood_test <-
+        seu_blood_test |>
+        Seurat::FindVariableFeatures() |>
+        Seurat::ScaleData() |>
+        Seurat::RunPCA() |>
+        Seurat::FindNeighbors(dims = 1:20)
+    resRange <- seq(0.2, 1.2, by = 0.1)
+    resNames <- paste0("RNA_snn_res.", resRange)
+    for (res in resRange) {
+        seu_blood_train <- FindClusters(seu_blood_train, resolution = res)
+    }
+    for (res in resRange) {
+        seu_blood_test <- FindClusters(seu_blood_test, resolution = res)
+    }
+    stability_res <- list()
+    for (k in resNames) {
+        stability_res[k] <- mclust::adjustedRandIndex(
+            seu_blood_train@meta.data[[k]],
+            seu_blood_test@meta.data[[k]]
+        )
+    }
+    return(unlist(stability_res))
+}
+
+TimePlot <- function(data, var, size, span) {
+    mean <- mean(data[[var]], na.rm = TRUE)
+    plot <-
+        data |>
+        ggplot(aes(x = measure_time, y = .data[[var]])) +
+        geom_point(alpha = 0.3, size = size) +
+        theme_bw() +
+        xlab("") +
+        ylab("") +
+        geom_smooth(method = "loess", se = TRUE, span = span, fill = "#FA8A63", color = "#FE162A") +
+        ggtitle(var) +
+        geom_hline(yintercept = mean, linetype = "dashed", color = "blue")
+    return(plot)
+}

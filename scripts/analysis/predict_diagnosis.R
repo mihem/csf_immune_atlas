@@ -9,6 +9,7 @@ options(tidymodels.dark = TRUE)
 # tidymodels  ------------------------------------------
 # combined_complete <- qread("final_one_rel_combined_complete.qs")
 combined <- qread("final_one_rel_combined.qs")
+source("scripts/analysis/ml_izkf_utils.R")
 
 set.seed(123)
 my_cols <- unname(createPalette(100, RColorBrewer::brewer.pal(8, "Set2")))
@@ -145,21 +146,6 @@ final_metric <- collect_metrics(last_fit)
 
 # qs::qsave(last_fit, file.path("analysis", "relative", "models", "dementia_somatoform_xgb_combined_final.qs"))
 # qs::qsave(last_fit, file.path("analysis", "relative", "models", "dementia_somatoform_xgb_basic_final.qs"))
-
-# function to plot confusion matrix  not normalized ----
-plotConfMat <- function(last_fit, name) {
-  collect_predictions(last_fit) |> # nolint
-    conf_mat(truth = dx_icd_level2, estimate = .pred_class) |> # nolint
-    autoplot(type = "heatmap") +
-    # scale_fill_distiller(palette = "RdBu") +
-    viridis::scale_fill_viridis() +
-    # scale_fill_gradient(low = "blue", high = "red") +
-    ggtitle(glue::glue("{name}
-     ROC AUC {signif(final_metric$.estimate,2)[4]},
-     BACC {signif(final_metric$.estimate,2)[2]}")) +
-    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.3))
-  ggsave(file.path("analysis", "relative", "models", glue::glue("{name}_xgb_conf_mat.pdf")), width = 5, height = 5)
-}
 
 # plotConfMat(last_fit, "ms_somatoform_combined")
 # plotConfMat(last_fit, "ms_somatoform_basic")
