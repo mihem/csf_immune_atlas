@@ -389,3 +389,23 @@ bplot_age <-
     scale_fill_manual(values = seu_csf_train@misc$cluster_col)
 
 ggsave(plot = bplot_age, filename = file.path("analysis", "relative", "boxplots", "violin_csf_datathin_age.pdf"), width = 2, height = 3)
+
+# plot age ----
+fplot_age <-
+    Embeddings(seu_csf_train, "umap") |>
+    bind_cols(age = combined_complete_norm$age) |>
+    ggplot(aes(x = umap_1, y = umap_2, color = age)) +
+    geom_point(size = .5, alpha = .5) +
+    viridis::scale_color_viridis() +
+    labs(x = "UMAP1", y = "UMAP2") +
+    theme_classic() +
+    theme(
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        axis.title.x = element_text(size = 15),
+        axis.title.y = element_text(size = 15),
+        panel.border = element_rect(color = "black", linewidth = 1, fill = NA),
+        aspect.ratio = 1,
+    )
+
+ggsave(plot = fplot_age, filename = file.path("analysis", "relative", "feature", "fplot_csf_datathin_age.png"), width = 3, height = 3)
