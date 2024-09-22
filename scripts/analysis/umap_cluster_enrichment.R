@@ -13,26 +13,12 @@ library(Polychrome)
 # read in custom functions ----
 source("scripts/analysis/ml_izkf_utils.R")
 
+# custom colors
 my_cols <- unname(Polychrome::createPalette(300, RColorBrewer::brewer.pal(8, "Set2")))
 
 # read in data ---
 seu_csf_train <- qs::qread("seu_csf_train.qs")
 combined_complete_norm <- qs::qread("final_one_rel_combined_norm_complete.qs")
-
-# check number of ms/dementia patients per cluster ----
-dplyr::count(seu_csf_train@meta.data, cluster, dx_icd_level2) |>
-    dplyr::filter(dx_icd_level2 == "dementia")
-
-dplyr::count(seu_csf_train@meta.data, cluster, dx_icd_level2) |>
-    dplyr::filter(dx_icd_level2 == "multiple sclerosis")
-
-combined_complete_norm |>
-    dplyr::filter(dx_icd_level2 == "multiple sclerosis") |>
-    dplyr::count(dx_biobanklist_level2)
-
-combined_complete_norm |>
-    dplyr::filter(dx_icd_level2 == "dementia") |>
-    dplyr::count(dx_biobanklist_level2)
 
 # disease enrichment manual for ICD multiple sclerosis ---
 combined_dx_biobanklist_level2_matrix_ms <-
@@ -65,38 +51,35 @@ abundance_combined_soupx_csf_biobanklist_level2_ms <-
 
 lapply(unique(seu_csf_train$cluster), abundanceCategoryPlot, data = abundance_combined_soupx_csf_biobanklist_level2_ms)
 
+# compare age in multiple sclerosis vs all other in enrichment ----
+ms_patients_age <-
+    combined_complete_norm |>
+    mutate(cluster = seu_csf_train$cluster) |>
+    dplyr::filter(dx_icd_level2 == "multiple sclerosis") |>
+    drop_na(dx_biobanklist_level2) |>
+    dplyr::filter(cluster %in% c("CNS autoimmune", "neurodegenerative")) |>
+    dplyr::mutate(cluster = as.character(cluster))
+
+boxplot_cluster_manual(
+    data = ms_patients_age,
+    test_name = "age",
+    file_name = "ms_enriched"
+)
+
 # MS EDSS -----
-ms_psa_join <- qs::qread("ms_psa_join.qs")
+ms_psa_join <-
+    qs::qread("ms_psa_join.qs") |>
+    dplyr::mutate(cluster = if_else(cluster == "CNS autoimmune", "CNS autoimmune", "other"))
 
-ms_psa_edss_plot_stat <-
-    ms_psa_join |>
-    dplyr::mutate(cluster = if_else(cluster == "CNS autoimmune", "CNS autoimmune", "other")) |>
-    wilcox.test(formula = edss ~ cluster, data = _) |>
-    broom::tidy() |>
-    mutate(p.symbol = as.character(symnum(p.value, corr = FALSE, na = FALSE, cutpoints = c(0, 0.001, 0.01, 0.05, 1), symbols = c("***", "**", "*", " "))))
-
-stats_list <- vector("list")
-stats_list$annotation <- ms_psa_edss_plot_stat$p.symbol
-stats_list$comparisons[[1]] <- c("CNS autoimmune", "other")
-
-ms_psa_edss_plot <-
-    ms_psa_join |>
-    dplyr::mutate(cluster = if_else(cluster == "CNS autoimmune", "CNS autoimmune", "other")) |>
-    ggplot(aes(x = cluster, y = edss, fill = cluster)) +
-    geom_boxplot() +
-    geom_jitter(width = 0.3, height = 0, size = .7, shape = 21, aes(fill = cluster)) +
-    theme_bw() +
-    xlab("") +
-    ylab("EDSS") +
-    theme(legend.position = "none") +
-    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
-    ggsignif::geom_signif(comparisons = stats_list$comparisons, annotation = stats_list$annotation, textsize = 5, step_increase = 0.05, vjust = 0.7)
-
-ggsave(
- filename = file.path("analysis", "relative", "boxplots", "ms_psa_edss_plot.pdf"),
-    ms_psa_edss_plot,
-    width = 2,
-    height = 5
+lapply(
+    c("edss", "age"),
+    function(x) {
+        boxplot_cluster_manual(
+            data = ms_psa_join,
+            test_name = x,
+            file_name = "ms_edss"
+        )
+    }
 )
 
 # disease enrichment manual for ICD dementia ---
@@ -168,45 +151,76 @@ ggsave(
 
 # analyze neuropsychological data ----
 # based on manual compiled data
-patients_cluster_dementia_manual_merge <- qs::qread("patients_cluster_dementia_manual_merge.qs")
+patients_cluster_dementia_manual_merge <- qs::qread("patients_cluster_dementia_manual_merge.qs") |>
+    dplyr::mutate(cluster = if_else(cluster == "neurodegenerative", "neurodegenerative", "other"))
 
-boxplot_dementia_cluster_manual <- function(test_name) {
-formula <- paste0(test_name, "~", "cluster")
-patients_dementia_manual_merge_stat <-
-    patients_cluster_dementia_manual_merge |>
-    dplyr::mutate(cluster = if_else(cluster == "neurodegenerative", "neurodegenerative", "other")) |>
-    wilcox.test(as.formula(formula), data = _) |>
-    broom::tidy() |>
-    mutate(p.symbol = as.character(symnum(p.value, corr = FALSE, na = FALSE, cutpoints = c(0, 0.001, 0.01, 0.05, 1), symbols = c("***", "**", "*", ""))))
+boxplot_cluster_manual <- function(data, test_name, file_name) {
+    formula <- paste0(test_name, "~", "cluster")
+    stat <-
+        data |>
+        wilcox.test(as.formula(formula), data = _) |>
+        broom::tidy() |>
+        mutate(p.symbol = as.character(symnum(p.value, corr = FALSE, na = FALSE, cutpoints = c(0, 0.001, 0.01, 0.05, 1), symbols = c("***", "**", "*", ""))))
 
-stats_list <- vector("list")
-stats_list$annotation <- patients_dementia_manual_merge_stat$p.symbol
-stats_list$comparisons[[1]] <- c("neurodegenerative", "other")
+    stats_list <- vector("list")
+    stats_list$annotation <- stat$p.symbol
+    stats_list$comparisons[[1]] <- unique(data$cluster)
 
-patients_dementia_manual_merge_plot <-
-    patients_cluster_dementia_manual_merge |>
-    dplyr::mutate(cluster = if_else(cluster == "neurodegenerative", "neurodegenerative", "other")) |>
-    ggplot(aes(x = cluster, y = .data[[test_name]], fill = cluster)) +
-    geom_boxplot() +
-    geom_jitter(width = 0.3, height = 0, size = .7, shape = 21, aes(fill = cluster)) +
-    theme_bw() +
-    xlab("") +
-    ylab(test_name) +
-    theme(legend.position = "none") +
-    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) 
+    plot <-
+        data |>
+        ggplot(aes(x = cluster, y = .data[[test_name]], fill = cluster)) +
+        geom_boxplot() +
+        geom_jitter(width = 0.3, height = 0, size = .7, shape = 21, aes(fill = cluster)) +
+        theme_bw() +
+        xlab("") +
+        ylab(test_name) +
+        theme(legend.position = "none") +
+        theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
+        if (stat$p.value < 0.05) {
+            ggsignif::geom_signif(comparisons = stats_list$comparisons, annotation = stats_list$annotation, textsize = 5, step_increase = 0.05, vjust = 0.7)
+        }
 
-ggsave(
-    patients_dementia_manual_merge_plot,
-    filename = file.path("analysis", "relative", "boxplots", paste0("patients_dementia_manual_", test_name, ".pdf")),
-    width = 2,
-    height = 5
-)
+    ggsave(
+        plot,
+        filename = file.path("analysis", "relative", "boxplots", paste0("patients_cluster_manual_", file_name, "_", test_name, ".pdf")),
+        width = 2,
+        height = 5
+    )
 }
 
+# MMSE and age in neurodegenerative patients
+patients_cluster_dementia_manual_mmse  <-
+    patients_cluster_dementia_manual_merge |>
+    drop_na(MMSE)
+
 lapply(
-    c("MMSE", "MoCA"),
-    boxplot_dementia_cluster_manual
+    c("MMSE", "age"),
+    function(x) {
+        boxplot_cluster_manual(
+            data = patients_cluster_dementia_manual_mmse,
+            test_name = x,
+            file_name = "dementia_all"
+        )
+    }
 )
+
+# MMSE and MoCA only in DAT patients
+patients_cluster_dat <-
+    patients_cluster_dementia_manual_merge |>
+    dplyr::filter(subtype == "DAT") |>
+    drop_na(MMSE)
+
+lapply(
+    c("MMSE", "age"),
+    function(x) {
+        boxplot_cluster_manual(
+            data = patients_cluster_dat,
+            test_name = x,
+            file_name = "dementia_DAT"
+        )
+    }
+)
+
 # load extraced neuropsychological data
 # contains all available neuropsychological data of the patients (all dates)
 np_dementia <- qs::qread("np_dementia.qs")
@@ -216,14 +230,7 @@ dementia_patients <-
     combined_complete_norm |>
     mutate(cluster = seu_csf_train$cluster) |>
     dplyr::filter(dx_icd_level2 == "dementia")  |>
-    select(pid, cluster, measure_date)
-
-# function to calculate distance between dates
-date_distance_fun <- function(v1, v2, max_dist = 1) {
-    dist <- abs(as.double(difftime(v1, v2, units = "days")))
-    ret <- data.frame(include = (dist <= max_dist))
-    return(ret)
-}
+    dplyr::select(pid, cluster, measure_date, age)
 
 # function to plot NPU scores in neurodegenerative vs other clusters
 boxplot_dementia_cluster_np <- function(test_name) {
@@ -399,3 +406,13 @@ interval_counts <- data |>
 
 line_plot_dementia_longitudinal_mmse(data = np_dementia_longitudinal_mmse, cluster_selected = "neurodegenerative")
 line_plot_dementia_longitudinal_mmse(data = np_dementia_longitudinal_mmse, cluster_selected = "other")
+
+# age comparison in longitudinal data
+np_dementia_longitudinal_mmse_day0 <-
+    np_dementia_longitudinal_mmse |>
+    dplyr::filter(interval == 0)
+
+boxplot_cluster_manual(
+    data = np_dementia_longitudinal_mmse_day0,
+    test_name = "age",
+    file_name = "dementia_longitudinal")
