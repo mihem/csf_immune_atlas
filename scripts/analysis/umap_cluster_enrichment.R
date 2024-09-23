@@ -21,19 +21,44 @@ seu_csf_train <- qs::qread("seu_csf_train.qs")
 combined_complete_norm <- qs::qread("final_one_rel_combined_norm_complete.qs")
 
 # disease enrichment manual for ICD multiple sclerosis ---
-combined_dx_biobanklist_level2_matrix_ms <-
+combined_complete_norm_dummy <-
   combined_complete_norm |>
   dplyr::filter(dx_icd_level2 == "multiple sclerosis") |>
-  dplyr::select(dx_biobanklist_level2) |>
+  dplyr::select(dx_biobanklist_level2, age) |>
   drop_na() |>
   recipes::recipe(dx_biobanklist_level2 ~ .) |>
   recipes::step_dummy(dx_biobanklist_level2) |>
   recipes::prep() |>
-  recipes::bake(new_data = NULL) |>
-  as.matrix() |>
-  t()
+  recipes::bake(new_data = NULL) 
+
+# without adjustment
+combined_dx_biobanklist_level2_matrix_ms <-
+    combined_complete_norm_dummy |>
+    as.matrix() |>
+    t()
+
+# with adjustement
+vars_adjust <-
+    combined_complete_norm_dummy |>
+    select(!age) |>
+    names()
+
+combined_complete_norm_adjusted <-
+    combined_complete_norm_dummy |>
+    datawizard::adjust(effect = c("age"), select = vars_adjust, keep_intercept = TRUE) |>
+    tibble()
+
+combined_dx_biobanklist_level2_matrix_ms_adjusted <-
+    combined_complete_norm_adjusted |>
+    as.matrix() |>
+    t()
+
+# sanity check
+select(combined_complete_norm_dummy, age, dx_biobanklist_level2_RRMS, dx_biobanklist_level2_SPMS, dx_biobanklist_level2_PPMS)
+select(combined_complete_norm_adjusted, age, dx_biobanklist_level2_RRMS, dx_biobanklist_level2_SPMS, dx_biobanklist_level2_PPMS)
 
 rownames(combined_dx_biobanklist_level2_matrix_ms) <- gsub(x = rownames(combined_dx_biobanklist_level2_matrix_ms), pattern = "\\.", replacement = " ")
+rownames(combined_dx_biobanklist_level2_matrix_ms_adjusted) <- gsub(x = rownames(combined_dx_biobanklist_level2_matrix_ms_adjusted), pattern = "\\.", replacement = " ")
 
 patients_ms_cluster <-
     combined_complete_norm |>
@@ -43,13 +68,21 @@ patients_ms_cluster <-
     pull(cluster)
 
 abundance_combined_soupx_csf_biobanklist_level2_ms <-
-    SoupX::quickMarkers(combined_dx_biobanklist_level2_matrix_ms, patients_ms_cluster, FDR = 0.1, N = 100, expressCut = 0.9) |>
+    SoupX::quickMarkers(combined_dx_biobanklist_level2_matrix_ms, patients_ms_cluster, FDR = 0.1, N = 100, expressCut = 0.1) |>
+    tibble() |>
+    mutate(gene = gsub(x = gene, pattern = "dx_biobanklist_level2_", replacement = "")) |>
+    mutate(gene = gsub(x = gene, pattern = "\\.", replacement = " ")) |>
+    mutate(gene = gsub(x = gene, pattern = "opticus neuritis", replacement = "optic neuritis"))
+
+abundance_combined_soupx_csf_biobanklist_level2_ms_adjusted <-
+    SoupX::quickMarkers(combined_dx_biobanklist_level2_matrix_ms_adjusted, patients_ms_cluster, FDR = 0.1, N = 100, expressCut = 0.1) |>
     tibble() |>
     mutate(gene = gsub(x = gene, pattern = "dx_biobanklist_level2_", replacement = "")) |>
     mutate(gene = gsub(x = gene, pattern = "\\.", replacement = " ")) |>
     mutate(gene = gsub(x = gene, pattern = "opticus neuritis", replacement = "optic neuritis"))
 
 lapply(unique(seu_csf_train$cluster), abundanceCategoryPlot, data = abundance_combined_soupx_csf_biobanklist_level2_ms)
+lapply(unique(seu_csf_train$cluster), abundanceCategoryPlot, data = abundance_combined_soupx_csf_biobanklist_level2_ms_adjusted)
 
 # compare age in multiple sclerosis vs all other in enrichment ----
 ms_patients_age <-
@@ -78,6 +111,28 @@ lapply(
             data = ms_psa_join,
             test_name = x,
             file_name = "ms_edss"
+        )
+    }
+)
+
+# MS EDSS age adjusted
+ms_psa_join_adjusted <-
+    ms_psa_join |>
+    datawizard::adjust(effect = c("age"), select = "edss", keep_intercept = TRUE) |>
+    tibble() |>
+    rename(age_adjusted_edss = edss)
+
+# sanity check
+select(ms_psa_join, age, edss)
+select(ms_psa_join_adjusted, age, edss)
+
+lapply(
+    "age_adjusted_edss",
+    function(x) {
+        boxplot_cluster_manual(
+            data = ms_psa_join_adjusted,
+            test_name = x,
+            file_name = "ms_edss_adjusted"
         )
     }
 )
@@ -361,6 +416,9 @@ results_volcano_stat_dementia |>
 # also no significant adjusted p values for pr (procent rank) using wilcox and range (categorized) using fisher
 
 # longitudinal np data
+# calculate interval between test_date and measure_date
+# join non-neurodegenerative clusters into others
+# adjust age for interval
 np_dementia_longitudinal_mmse <-
     np_dementia |>
     dplyr::filter(test %in% "MMSE") |>
@@ -371,7 +429,8 @@ np_dementia_longitudinal_mmse <-
     group_by(pid) |>
     dplyr::filter(n() > 1) |>
     ungroup() |>
-    mutate(interval_month = floor(interval))
+    mutate(interval_month = floor(interval)) |>
+    mutate(age = age + time_length(interval(measure_date, test_date), unit = "years"))
 
 
 line_plot_dementia_longitudinal_mmse <- function(data, cluster_selected) {
@@ -393,12 +452,14 @@ interval_counts <- data |>
         geom_smooth(method = "loess") +
         theme_bw() +
         xlab("") +
-        ylab("MMSE") +
+        # ylab("MMSE") +
+        ylab("age-adjusted MMSE") +
         theme(legend.position = "none") +
         # xlim(0, 30) +
         ylim(0, 30) +
         scale_color_manual(values = my_cols)
-    ggsave(file.path("analysis", "relative", "abundance", paste0("longitudinal_", cluster_selected, "_mmse.pdf")),
+    # ggsave(file.path("analysis", "relative", "abundance", paste0("longitudinal_", cluster_selected, "_mmse.pdf")),
+    ggsave(file.path("analysis", "relative", "abundance", paste0("longitudinal_", cluster_selected, "_mmse_adjusted.pdf")),
         plot,
         width = 5, height = 5
     )
@@ -406,6 +467,20 @@ interval_counts <- data |>
 
 line_plot_dementia_longitudinal_mmse(data = np_dementia_longitudinal_mmse, cluster_selected = "neurodegenerative")
 line_plot_dementia_longitudinal_mmse(data = np_dementia_longitudinal_mmse, cluster_selected = "other")
+
+# age adjusted line plots
+np_dementia_longitudinal_mmse_adjusted <-
+    np_dementia_longitudinal_mmse |>
+    datawizard::adjust(effect = c("age"), select = "score_abs", keep_intercept = TRUE) |>
+    tibble()
+
+# sanity check
+select(np_dementia_longitudinal_mmse, age, score_abs)
+select(np_dementia_longitudinal_mmse_adjusted, age, score_abs)
+
+line_plot_dementia_longitudinal_mmse(data = np_dementia_longitudinal_mmse_adjusted, cluster_selected = "neurodegenerative")
+line_plot_dementia_longitudinal_mmse(data = np_dementia_longitudinal_mmse_adjusted, cluster_selected = "other")
+
 
 # age comparison in longitudinal data
 np_dementia_longitudinal_mmse_day0 <-

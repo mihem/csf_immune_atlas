@@ -261,7 +261,7 @@ combined_dx_icd_level2_matrix <-
 rownames(combined_dx_icd_level2_matrix) <- gsub(x = rownames(combined_dx_icd_level2_matrix), pattern = "\\.", replacement = " ")
 
 abundance_combined_soupx_csf_norm_datathin <-
-    SoupX::quickMarkers(combined_dx_icd_level2_matrix, seu_csf_train$cluster, FDR = 0.1, N = 100, expressCut = 0.9) |>
+    SoupX::quickMarkers(combined_dx_icd_level2_matrix, seu_csf_train$cluster, FDR = 0.1, N = 100, expressCut = 0.3) |>
     tibble() |>
     mutate(gene = gsub(x = gene, pattern = "dx_icd_level2_", replacement = "")) |>
     mutate(gene = gsub(x = gene, pattern = "\\.", replacement = " ")) |>
