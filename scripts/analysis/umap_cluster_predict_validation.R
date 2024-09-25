@@ -25,6 +25,8 @@ validation_combined <-
 plot_category(data = validation_combined, category = "dx_icd_level2", width = 7, height = 7)
 
 # Replace "_" with "-" in column names to match xgb model
+names(validation_combined) <- gsub(x = names(validation_combined), pattern = "_", replacement = "-")
+
 pred_cluster <-
     xgb_model |>
     extract_workflow() |>
