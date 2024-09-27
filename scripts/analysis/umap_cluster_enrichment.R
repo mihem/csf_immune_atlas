@@ -31,13 +31,6 @@ combined_complete_norm_dummy <-
   recipes::prep() |>
   recipes::bake(new_data = NULL) 
 
-# without adjustment
-combined_dx_biobanklist_level2_matrix_ms <-
-    combined_complete_norm_dummy |>
-    as.matrix() |>
-    t()
-
-# with adjustement
 vars_adjust <-
     combined_complete_norm_dummy |>
     select(!age) |>
@@ -53,12 +46,7 @@ combined_dx_biobanklist_level2_matrix_ms_adjusted <-
     as.matrix() |>
     t()
 
-# sanity check
-select(combined_complete_norm_dummy, age, dx_biobanklist_level2_RRMS, dx_biobanklist_level2_SPMS, dx_biobanklist_level2_PPMS)
-select(combined_complete_norm_adjusted, age, dx_biobanklist_level2_RRMS, dx_biobanklist_level2_SPMS, dx_biobanklist_level2_PPMS)
-
-rownames(combined_dx_biobanklist_level2_matrix_ms) <- gsub(x = rownames(combined_dx_biobanklist_level2_matrix_ms), pattern = "\\.", replacement = " ")
-rownames(combined_dx_biobanklist_level2_matrix_ms_adjusted) <- gsub(x = rownames(combined_dx_biobanklist_level2_matrix_ms_adjusted), pattern = "\\.", replacement = " ")
+patients_ms_cluster 
 
 patients_ms_cluster <-
     combined_complete_norm |>
@@ -67,22 +55,27 @@ patients_ms_cluster <-
     drop_na(dx_biobanklist_level2) |>
     pull(cluster)
 
-abundance_combined_soupx_csf_biobanklist_level2_ms <-
-    SoupX::quickMarkers(combined_dx_biobanklist_level2_matrix_ms, patients_ms_cluster, FDR = 0.1, N = 100, expressCut = 0.1) |>
-    tibble() |>
-    mutate(gene = gsub(x = gene, pattern = "dx_biobanklist_level2_", replacement = "")) |>
-    mutate(gene = gsub(x = gene, pattern = "\\.", replacement = " ")) |>
-    mutate(gene = gsub(x = gene, pattern = "opticus neuritis", replacement = "optic neuritis"))
+# select clusters with at least 30 patients
+cluster_of_interest <-
+    table(patients_ms_cluster) |>
+    as.data.frame() |>
+    dplyr::filter(Freq >= 30)  |>
+    pull(patients_ms_cluster)
+
+# sanity check
+select(combined_complete_norm_adjusted, age, dx_biobanklist_level2_RRMS, dx_biobanklist_level2_SPMS, dx_biobanklist_level2_PPMS)
+
+rownames(combined_dx_biobanklist_level2_matrix_ms_adjusted) <- gsub(x = rownames(combined_dx_biobanklist_level2_matrix_ms_adjusted), pattern = "\\.", replacement = " ")
 
 abundance_combined_soupx_csf_biobanklist_level2_ms_adjusted <-
     SoupX::quickMarkers(combined_dx_biobanklist_level2_matrix_ms_adjusted, patients_ms_cluster, FDR = 0.1, N = 100, expressCut = 0.1) |>
     tibble() |>
+    dplyr::filter(cluster %in% cluster_of_interest) |>
     mutate(gene = gsub(x = gene, pattern = "dx_biobanklist_level2_", replacement = "")) |>
     mutate(gene = gsub(x = gene, pattern = "\\.", replacement = " ")) |>
     mutate(gene = gsub(x = gene, pattern = "opticus neuritis", replacement = "optic neuritis"))
 
-lapply(unique(seu_csf_train$cluster), abundanceCategoryPlot, data = abundance_combined_soupx_csf_biobanklist_level2_ms)
-lapply(unique(seu_csf_train$cluster), abundanceCategoryPlot, data = abundance_combined_soupx_csf_biobanklist_level2_ms_adjusted)
+lapply(cluster_of_interest, abundanceCategoryPlot, data = abundance_combined_soupx_csf_biobanklist_level2_ms_adjusted)
 
 # compare age in multiple sclerosis vs all other in enrichment ----
 ms_patients_age <-
