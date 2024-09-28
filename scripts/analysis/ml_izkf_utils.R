@@ -685,3 +685,33 @@ boxplot_cluster_manual <- function(data, test_name, file_name) {
         height = 5
     )
 }
+
+# function to plot longitudinal MMSE from dementia patients
+line_plot_dementia_longitudinal_mmse <- function(data, cluster_selected) {
+    # only keep samles with rounded intervals with more than 2 values
+interval_counts <- data |>
+        dplyr::group_by(interval_month) |>
+        dplyr::summarise(count = n()) |>
+        dplyr::filter(count > 2) 
+
+    filtered_data <- data |>
+        dplyr::filter(interval_month %in% interval_counts$interval_month)
+
+    plot <-
+        filtered_data |>
+        dplyr::filter(cluster %in% c(cluster_selected)) |>
+        ggplot(aes(x = interval, y = score_abs)) +
+        geom_point(aes(color = pid)) +
+        geom_line(aes(color = pid)) +
+        geom_smooth(method = "loess") +
+        theme_bw() +
+        xlab("") +
+        ylab("age-adjusted MMSE") +
+        theme(legend.position = "none") +
+        ylim(0, 30) +
+        scale_color_manual(values = my_cols)
+    ggsave(file.path("analysis", "relative", "abundance", paste0("longitudinal_", cluster_selected, "_mmse_adjusted.pdf")),
+        plot,
+        width = 5, height = 5
+    )
+}
