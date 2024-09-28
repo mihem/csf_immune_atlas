@@ -650,3 +650,38 @@ TimePlot <- function(data, var, size, span) {
         geom_hline(yintercept = mean, linetype = "dashed", color = "blue")
     return(plot)
 }
+
+# boxplot for cluster enrichment based on clinical scores/tests
+boxplot_cluster_manual <- function(data, test_name, file_name) {
+    formula <- paste0(test_name, "~", "cluster")
+    stat <-
+        data |>
+        wilcox.test(as.formula(formula), data = _) |>
+        broom::tidy() |>
+        mutate(p.symbol = as.character(symnum(p.value, corr = FALSE, na = FALSE, cutpoints = c(0, 0.001, 0.01, 0.05, 1), symbols = c("***", "**", "*", ""))))
+
+    stats_list <- vector("list")
+    stats_list$annotation <- stat$p.symbol
+    stats_list$comparisons[[1]] <- unique(data$cluster)
+
+    plot <-
+        data |>
+        ggplot(aes(x = cluster, y = .data[[test_name]], fill = cluster)) +
+        geom_boxplot() +
+        geom_jitter(width = 0.3, height = 0, size = .7, shape = 21, aes(fill = cluster)) +
+        theme_bw() +
+        xlab("") +
+        ylab(test_name) +
+        theme(legend.position = "none") +
+        theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
+        if (stat$p.value < 0.05) {
+            ggsignif::geom_signif(comparisons = stats_list$comparisons, annotation = stats_list$annotation, textsize = 5, step_increase = 0.05, vjust = 0.7)
+        }
+
+    ggsave(
+        plot,
+        filename = file.path("analysis", "relative", "boxplots", paste0("patients_cluster_manual_", file_name, "_", test_name, ".pdf")),
+        width = 2,
+        height = 5
+    )
+}

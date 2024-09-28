@@ -50,7 +50,7 @@ validation_combined_dx_icd_level2_matrix <-
 rownames(validation_combined_dx_icd_level2_matrix) <- gsub(x = rownames(validation_combined_dx_icd_level2_matrix), pattern = "\\.", replacement = " ")
 
 abundance_validation_combined_soupx_csf_datathin <-
-    SoupX::quickMarkers(validation_combined_dx_icd_level2_matrix, pred_cluster, FDR = 0.1, N = 100, expressCut = 0.9) |>
+    SoupX::quickMarkers(validation_combined_dx_icd_level2_matrix, pred_cluster, FDR = 0.1, N = 100, expressCut = 0.3) |>
     tibble() |>
     mutate(gene = gsub(x = gene, pattern = "dx_icd_level2_", replacement = "")) |>
     mutate(gene = gsub(x = gene, pattern = "\\.", replacement = " ")) |>

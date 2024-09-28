@@ -68,7 +68,7 @@ select(combined_complete_norm_adjusted, age, dx_biobanklist_level2_RRMS, dx_biob
 rownames(combined_dx_biobanklist_level2_matrix_ms_adjusted) <- gsub(x = rownames(combined_dx_biobanklist_level2_matrix_ms_adjusted), pattern = "\\.", replacement = " ")
 
 abundance_combined_soupx_csf_biobanklist_level2_ms_adjusted <-
-    SoupX::quickMarkers(combined_dx_biobanklist_level2_matrix_ms_adjusted, patients_ms_cluster, FDR = 0.1, N = 100, expressCut = 0.1) |>
+    SoupX::quickMarkers(combined_dx_biobanklist_level2_matrix_ms_adjusted, patients_ms_cluster, FDR = 0.1, N = 100, expressCut = 0.3) |>
     tibble() |>
     dplyr::filter(cluster %in% cluster_of_interest) |>
     mutate(gene = gsub(x = gene, pattern = "dx_biobanklist_level2_", replacement = "")) |>
@@ -93,39 +93,40 @@ boxplot_cluster_manual(
 )
 
 # MS EDSS -----
-ms_psa_join <-
-    qs::qread("ms_psa_join.qs") |>
+ms_edss <-  
+    qs::qread("ms_edss.qs") |>
     dplyr::mutate(cluster = if_else(cluster == "CNS autoimmune", "CNS autoimmune", "other"))
 
-lapply(
-    c("edss", "age"),
-    function(x) {
-        boxplot_cluster_manual(
-            data = ms_psa_join,
-            test_name = x,
-            file_name = "ms_edss"
-        )
-    }
-)
+ms_psa_join <-
+    ms_psa_join |>
+    dplyr::mutate(cluster = if_else(cluster == "CNS autoimmune", "CNS autoimmune", "other"))
 
 # MS EDSS age adjusted
-ms_psa_join_adjusted <-
-    ms_psa_join |>
+ms_edss_adjusted <-
+    ms_edss |>
     datawizard::adjust(effect = c("age"), select = "edss", keep_intercept = TRUE) |>
     tibble() |>
     rename(age_adjusted_edss = edss)
 
 # sanity check
-select(ms_psa_join, age, edss)
-select(ms_psa_join_adjusted, age, edss)
+select(ms_edss, age, edss)
+select(ms_edss_adjusted, age, age_adjusted_edss)
+
+sum(is.na(ms_edss_adjusted$age_adjusted_edss))
+sum(is.na(ms_psa_join_adjusted$age_adjusted_edss))
 
 lapply(
-    "age_adjusted_edss",
+    # c("edss", "age"),
+    c("age_adjusted_edss"),
     function(x) {
         boxplot_cluster_manual(
-            data = ms_psa_join_adjusted,
+            data = ms_edss_adjusted,
+            # data = ms_psa_join_adjusted,
+            # data = ms_edss,
+            # data = ms_psa_join,
             test_name = x,
-            file_name = "ms_edss_adjusted"
+            # file_name = "ms_edss_adjusted"
+            file_name = "ms_psa_adjusted"
         )
     }
 )
@@ -137,41 +138,36 @@ patients_cluster_dementia_manual_complete <-
     patients_cluster_dementia_manual_merge |>
     drop_na(subtype)
 
-# patients_cluster_dementia_manual_complete <- 
-#     patients_cluster_dementia_manual_merge |>
-#     drop_na(subtype)
+# disease enrichment manual for ICD multiple sclerosis ---
+dementia_combined_complete_norm_dummy <-
+  patients_cluster_dementia_manual_complete |>
+  dplyr::select(subtype, age) |>
+  recipes::recipe(subtype ~ .) |>
+  recipes::step_dummy(subtype) |>
+  recipes::prep() |>
+  recipes::bake(new_data = NULL) 
 
-# patients_cluster_dementia_manual_top_subtypes <- 
-#     patients_cluster_dementia_manual_merge |>
-#     count(subtype) |>
-#     drop_na() |>
-#     slice_max(order_by = n, n = 3) |>
-#     pull(subtype)
+vars_adjust <-
+    dementia_combined_complete_norm_dummy |>
+    select(!age) |>
+    names()
 
-# patients_cluster_dementia_manual_top <-
-#     patients_cluster_dementia_manual_merge |>
-#     dplyr::filter(subtype %in% patients_cluster_dementia_manual_top_subtypes)
+dementia_combined_complete_norm_adjusted <-
+    dementia_combined_complete_norm_dummy |>
+    datawizard::adjust(effect = c("age"), select = vars_adjust, keep_intercept = TRUE) |>
+    tibble()
 
-# patients_cluster_dementia_manual <-
-#     patients_cluster_dementia_manual_complete |>
-#     dplyr::filter(source == "manual")
-
-patients_cluster_dementia_manual_matrix <-
-    patients_cluster_dementia_manual  |>
-    dplyr::select(subtype) |>
-    recipes::recipe(subtype ~ .) |>
-    recipes::step_dummy(subtype) |>
-    recipes::prep() |>
-    recipes::bake(new_data = NULL) |>
+dementia_combined_matrix_adjusted <-
+    dementia_combined_complete_norm_adjusted |>
     as.matrix() |>
     t()
 
-rownames(patients_cluster_dementia_manual_matrix) <- gsub(x = rownames(patients_cluster_dementia_manual_matrix), pattern = "\\.", replacement = " ")
+rownames(dementia_combined_matrix_adjusted) <- gsub(x = rownames(dementia_combined_matrix_adjusted), pattern = "\\.", replacement = " ")
 
 abundance_combined_soupx_csf_biobanklist_level2_dementia <-
-    SoupX::quickMarkers(patients_cluster_dementia_manual_matrix, patients_cluster_dementia_manual_complete$cluster, FDR = 0.1, N = 100, expressCut = 0.9)  |>
+    SoupX::quickMarkers(dementia_combined_matrix_adjusted, patients_cluster_dementia_manual_complete$cluster, FDR = 0.1, N = 100, expressCut = 0.3)  |>
     tibble() |>
-    mutate(gene = gsub(x = gene, pattern = "dx_biobanklist_level2_", replacement = "")) |>
+    mutate(gene = gsub(x = gene, pattern = "subtype_", replacement = "")) |>
     mutate(gene = gsub(x = gene, pattern = "\\.", replacement = " ")) |>
     mutate(gene = gsub(x = gene, pattern = "opticus neuritis", replacement = "optic neuritis"))
 
@@ -199,72 +195,29 @@ ggsave(
 
 # analyze neuropsychological data ----
 # based on manual compiled data
-patients_cluster_dementia_manual_merge <- qs::qread("patients_cluster_dementia_manual_merge.qs") |>
-    dplyr::mutate(cluster = if_else(cluster == "neurodegenerative", "neurodegenerative", "other"))
 
-boxplot_cluster_manual <- function(data, test_name, file_name) {
-    formula <- paste0(test_name, "~", "cluster")
-    stat <-
-        data |>
-        wilcox.test(as.formula(formula), data = _) |>
-        broom::tidy() |>
-        mutate(p.symbol = as.character(symnum(p.value, corr = FALSE, na = FALSE, cutpoints = c(0, 0.001, 0.01, 0.05, 1), symbols = c("***", "**", "*", ""))))
-
-    stats_list <- vector("list")
-    stats_list$annotation <- stat$p.symbol
-    stats_list$comparisons[[1]] <- unique(data$cluster)
-
-    plot <-
-        data |>
-        ggplot(aes(x = cluster, y = .data[[test_name]], fill = cluster)) +
-        geom_boxplot() +
-        geom_jitter(width = 0.3, height = 0, size = .7, shape = 21, aes(fill = cluster)) +
-        theme_bw() +
-        xlab("") +
-        ylab(test_name) +
-        theme(legend.position = "none") +
-        theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
-        if (stat$p.value < 0.05) {
-            ggsignif::geom_signif(comparisons = stats_list$comparisons, annotation = stats_list$annotation, textsize = 5, step_increase = 0.05, vjust = 0.7)
-        }
-
-    ggsave(
-        plot,
-        filename = file.path("analysis", "relative", "boxplots", paste0("patients_cluster_manual_", file_name, "_", test_name, ".pdf")),
-        width = 2,
-        height = 5
-    )
-}
 
 # MMSE and age in neurodegenerative patients
-patients_cluster_dementia_manual_mmse  <-
-    patients_cluster_dementia_manual_merge |>
-    drop_na(MMSE)
+patients_cluster_dementia_manual_mmse_adjusted <-
+    qs::qread("patients_cluster_dementia_manual_merge.qs") |>
+    dplyr::mutate(cluster = if_else(cluster == "neurodegenerative", "neurodegenerative", "other")) |>
+    drop_na(MMSE) |>
+    datawizard::adjust(effect = c("age"), select = "MMSE", keep_intercept = TRUE) |>
+    tibble() |>
+    rename(age_adjusted_mmse = MMSE)
+
+# sanity check
+patients_cluster_dementia_manual_mmse_adjusted |>
+    arrange(desc(age)) |>
+    select(age, age_adjusted_mmse)
 
 lapply(
-    c("MMSE", "age"),
+    c("age_adjusted_mmse"),
     function(x) {
         boxplot_cluster_manual(
-            data = patients_cluster_dementia_manual_mmse,
+            data = patients_cluster_dementia_manual_mmse_adjusted,
             test_name = x,
-            file_name = "dementia_all"
-        )
-    }
-)
-
-# MMSE and MoCA only in DAT patients
-patients_cluster_dat <-
-    patients_cluster_dementia_manual_merge |>
-    dplyr::filter(subtype == "DAT") |>
-    drop_na(MMSE)
-
-lapply(
-    c("MMSE", "age"),
-    function(x) {
-        boxplot_cluster_manual(
-            data = patients_cluster_dat,
-            test_name = x,
-            file_name = "dementia_DAT"
+            file_name = "dementia_adjusted"
         )
     }
 )
