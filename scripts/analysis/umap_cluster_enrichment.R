@@ -46,8 +46,6 @@ combined_dx_biobanklist_level2_matrix_ms_adjusted <-
     as.matrix() |>
     t()
 
-patients_ms_cluster 
-
 patients_ms_cluster <-
     combined_complete_norm |>
     mutate(cluster = seu_csf_train$cluster) |>
@@ -76,21 +74,6 @@ abundance_combined_soupx_csf_biobanklist_level2_ms_adjusted <-
     mutate(gene = gsub(x = gene, pattern = "opticus neuritis", replacement = "optic neuritis"))
 
 lapply(cluster_of_interest, abundanceCategoryPlot, data = abundance_combined_soupx_csf_biobanklist_level2_ms_adjusted)
-
-# compare age in multiple sclerosis vs all other in enrichment ----
-ms_patients_age <-
-    combined_complete_norm |>
-    mutate(cluster = seu_csf_train$cluster) |>
-    dplyr::filter(dx_icd_level2 == "multiple sclerosis") |>
-    drop_na(dx_biobanklist_level2) |>
-    dplyr::filter(cluster %in% c("CNS autoimmune", "neurodegenerative")) |>
-    dplyr::mutate(cluster = as.character(cluster))
-
-boxplot_cluster_manual(
-    data = ms_patients_age,
-    test_name = "age",
-    file_name = "ms_enriched"
-)
 
 # MS EDSS -----
 ms_edss <-  
