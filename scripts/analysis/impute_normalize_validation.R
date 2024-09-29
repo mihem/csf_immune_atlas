@@ -20,8 +20,12 @@ csf_data_mice <- select(csf_data, dx_icd_level1, dx_icd_level2, patient_id, gran
 csf_vars_imputed <- select(csf_data, patient_id, granulos:bright_NK, lymphos_basic:lactate) |>
   names()
 
+# missing CSF (drop those with missing granulos_CSF and cell_count_CSF
+# because they have lots of missing data and were removed for cluster
+# prediction
 missing_csf <-
   csf_data_mice |>
+  drop_na(granulos, cell_count) |>
   select(all_of(csf_vars_imputed)) |>
   skimr::skim()
 
