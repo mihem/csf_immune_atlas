@@ -80,10 +80,6 @@ ms_edss <-
     qs::qread("ms_edss.qs") |>
     dplyr::mutate(cluster = if_else(cluster == "CNS autoimmune", "CNS autoimmune", "other"))
 
-ms_psa_join <-
-    ms_psa_join |>
-    dplyr::mutate(cluster = if_else(cluster == "CNS autoimmune", "CNS autoimmune", "other"))
-
 # MS EDSS age adjusted
 ms_edss_adjusted <-
     ms_edss |>
@@ -104,12 +100,8 @@ lapply(
     function(x) {
         boxplot_cluster_manual(
             data = ms_edss_adjusted,
-            # data = ms_psa_join_adjusted,
-            # data = ms_edss,
-            # data = ms_psa_join,
             test_name = x,
-            # file_name = "ms_edss_adjusted"
-            file_name = "ms_psa_adjusted"
+            file_name = "ms_edss_adjusted"
         )
     }
 )
