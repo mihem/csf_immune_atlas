@@ -113,6 +113,8 @@ patients_cluster_dementia_manual_complete <-
     patients_cluster_dementia_manual_merge |>
     drop_na(subtype)
 
+count(patients_cluster_dementia_manual_merge, subtype)
+
 # disease enrichment manual for ICD multiple sclerosis ---
 dementia_combined_complete_norm_dummy <-
   patients_cluster_dementia_manual_complete |>
@@ -164,8 +166,8 @@ patients_dementia_plot <-
 ggsave(
     filename = file.path("analysis", "relative", "abundance", "patients_dementia_plot.pdf"),
     patients_dementia_plot,
-    width = 4,
-    height = 6
+    width = 3.5,
+    height = 4
 )
 
 # analyze neuropsychological data ----
