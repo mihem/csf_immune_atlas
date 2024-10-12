@@ -221,9 +221,9 @@ np_dementia_longitudinal_mmse <-
     mutate(interval = time_length(interval(measure_date, test_date), unit = "months")) |>
     mutate(cluster = if_else(cluster == "neurodegenerative", "neurodegenerative", "other")) |>
     mutate(pid = as.character(pid)) |>
-    group_by(pid) |>
-    dplyr::filter(n() > 1) |>
-    ungroup() |>
+    # group_by(pid) |>
+    # dplyr::filter(n() > 1) |>
+    # ungroup() |>
     mutate(interval_month = floor(interval)) |>
     mutate(age = age + time_length(interval(measure_date, test_date), unit = "years"))
 
@@ -240,3 +240,73 @@ select(np_dementia_longitudinal_mmse_adjusted, age, score_abs)
 # plot longitudinal MMSE line plots
 line_plot_dementia_longitudinal_mmse(data = np_dementia_longitudinal_mmse_adjusted, cluster_selected = "neurodegenerative")
 line_plot_dementia_longitudinal_mmse(data = np_dementia_longitudinal_mmse_adjusted, cluster_selected = "other")
+
+event_threshold <- 18
+
+np_dementia_survival <-
+    np_dementia_longitudinal_mmse_adjusted |>
+    mutate(event = ifelse(score_abs < event_threshold, 1, 0)) |>
+    group_by(pid) |>
+    summarize(time = max(interval), status = max(event), cluster = dplyr::first(cluster), age = max(age)) |>
+    # dplyr::filter(time >= 0) |>
+    arrange(pid)
+
+# sanity check
+np_dementia_longitudinal_mmse_adjusted |>
+    select(pid, interval, cluster, score_abs) |>
+    arrange(interval) |>
+    print(n = 50)
+
+# np_dementia_survival <-
+#     np_dementia_longitudinal_mmse_adjusted |>
+#     group_by(pid) |>
+#     mutate(
+#         baseline = first(score_abs),
+#         event_threshold = baseline * 0.7,
+#         event = ifelse(score_abs < event_threshold, 1, 0)
+#     ) |>
+#     select(pid, interval, cluster, score_abs, baseline, event_threshold, event) |>
+#     arrange(pid) |>
+#     summarize(
+#         time = max(interval),
+#         status = max(event), cluster = dplyr::first(cluster)
+#     ) |>
+#     arrange(pid)
+
+# sanity check 
+np_dementia_longitudinal_mmse_adjusted |>
+    mutate(event = ifelse(score_abs < event_threshold, 1, 0)) |>
+    select(pid, score_abs, cluster, interval, age) |>
+    arrange(pid)
+
+sum(np_dementia_survival$status)
+
+# perform survival analysis
+library(survminer)
+library(survival)
+
+surv_fit <- survfit(Surv(time, status) ~ cluster, data = np_dementia_survival)
+# cox_fit <- survfit(coxph(Surv(time, status) ~ cluster + age, data = np_dementia_survival))
+
+summary(surv_fit)
+# summary(cox_fit)
+
+surv_plot <-
+    ggsurvplot(
+        surv_fit,
+        data = np_dementia_survival,
+        size = 1, # change line size
+        conf.int = TRUE, # Add confidence interval
+        # risk.table = TRUE, # Add risk table
+        # risk.table.col = "strata", # Risk table color by groups
+        legend.labs =
+            c("neurodegenerative", "other"), # Change legend labels
+        ggtheme = theme_bw(),
+        break.time.by = 10,
+        xlim = c(-50, 100)
+    )
+
+
+pdf(file = file.path("analysis", "relative", "survival", "survival_plot.pdf"), width = 5, height = 5)
+print(surv_plot, newpage = FALSE)
+dev.off()
