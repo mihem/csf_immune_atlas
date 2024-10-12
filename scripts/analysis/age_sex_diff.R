@@ -4,7 +4,7 @@ library(broom)
 library(RColorBrewer)
 library(WRS2)
 
-combined_complete <- qread("final_one_rel_combined_complete.qs")
+combined_complete <- qread(file.path("objects", "final_one_rel_combined_complete.qs"))
 source("scripts/analysis/ml_izkf_utils.R")
 
 # compare age and sex across somatoform ----

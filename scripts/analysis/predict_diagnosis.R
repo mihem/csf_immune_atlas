@@ -7,8 +7,8 @@ library(doMC)
 options(tidymodels.dark = TRUE)
 
 # tidymodels  ------------------------------------------
-# combined_complete <- qread("final_one_rel_combined_complete.qs")
-combined <- qread("final_one_rel_combined.qs")
+# combined_complete <- qread(file.path("objects", "final_one_rel_combined_complete.qs"))
+combined <- qread(file.path("objects", "final_one_rel_combined.qs"))
 source("scripts/analysis/ml_izkf_utils.R")
 
 set.seed(123)

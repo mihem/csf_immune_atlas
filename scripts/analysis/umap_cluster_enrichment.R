@@ -19,8 +19,8 @@ source("scripts/analysis/ml_izkf_utils.R")
 my_cols <- unname(Polychrome::createPalette(300, RColorBrewer::brewer.pal(8, "Set2")))
 
 # read in data ---
-seu_csf_train <- qs::qread("seu_csf_train.qs")
-combined_complete_norm <- qs::qread("final_one_rel_combined_norm_complete.qs")
+seu_csf_train <- qs::qread(file.path("objects", "seu_csf_train.qs"))
+combined_complete_norm <- qs::qread(file.path("objects", "final_one_rel_combined_norm_complete.qs"))
 
 # disease enrichment manual for ICD multiple sclerosis ---
 combined_complete_norm_dummy <-
@@ -79,7 +79,7 @@ lapply(cluster_of_interest, abundanceCategoryPlot, data = abundance_combined_sou
 
 # MS EDSS -----
 ms_edss <-  
-    qs::qread("ms_edss.qs") |>
+    qs::qread(file.path("objects", "ms_edss.qs")) |>
     dplyr::mutate(cluster = if_else(cluster == "CNS autoimmune", "CNS autoimmune", "other"))
 
 # MS EDSS age adjusted
@@ -109,7 +109,7 @@ lapply(
 )
 
 # disease enrichment manual for ICD dementia ---
-patients_cluster_dementia_manual_merge <- qs::qread("patients_cluster_dementia_manual_merge.qs")
+patients_cluster_dementia_manual_merge <- qs::qread(file.path("objects", "patients_cluster_dementia_manual_merge.qs"))
 
 patients_cluster_dementia_manual_complete <- 
     patients_cluster_dementia_manual_merge |>
@@ -178,7 +178,7 @@ ggsave(
 
 # MMSE and age in neurodegenerative patients
 patients_cluster_dementia_manual_mmse_adjusted <-
-    qs::qread("patients_cluster_dementia_manual_merge.qs") |>
+    qs::qread(file.path("objects", "patients_cluster_dementia_manual_merge.qs")) |>
     dplyr::mutate(cluster = if_else(cluster == "neurodegenerative", "neurodegenerative", "other")) |>
     drop_na(MMSE) |>
     datawizard::adjust(effect = c("age"), select = "MMSE", keep_intercept = TRUE) |>
@@ -203,7 +203,7 @@ lapply(
 
 # load extraced neuropsychological data
 # contains all available neuropsychological data of the patients (all dates)
-np_dementia <- qs::qread("np_dementia.qs")
+np_dementia <- qs::qread(file.path("objects", "np_dementia.qs"))
 
 # join patients with neuropsychology data ----
 dementia_patients <-

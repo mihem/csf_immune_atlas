@@ -23,7 +23,7 @@ my_cols <- unname(Polychrome::createPalette(100, pals::cols25()))
 phmap_colors <- colorRampPalette(rev(brewer.pal(n = 8, name = "RdBu")))(100) #nice colors for pheatmap
 
 # read in prepared data for analysis ----
-combined_complete_norm <- qs::qread("final_one_rel_combined_norm_complete.qs")
+combined_complete_norm <- qs::qread(file.path("objects", "final_one_rel_combined_norm_complete.qs"))
 
 # finding the right distribution ----
 fitdistrplus::descdist(combined_complete_norm$granulos_CSF)
@@ -158,7 +158,7 @@ seu_csf_train <-
 
 qsave(seu_csf_train, "seu_csf_train.qs")
 
-# seu_csf_full <- qread("seu_csf_norm.qs")
+# seu_csf_full <- qread(file.path("objects", "seu_csf_norm.qs"))
 # mclust::adjustedRandIndex(seu_csf_train$RNA_snn_res.0.6, seu_csf_full$RNA_snn_res.0.6)
 
 # create Seurat object test

@@ -12,7 +12,7 @@ library(Polychrome)
 set.seed(123)
 my_cols <- unname(Polychrome::createPalette(100, RColorBrewer::brewer.pal(8, "Set2")))
 
-combined <- qread("final_one_rel_combined.qs")
+combined <- qread(file.path("objects", "final_one_rel_combined.qs"))
 
 # remove if many columns are missing
 combined_fil <-

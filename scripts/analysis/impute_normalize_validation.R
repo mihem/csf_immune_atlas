@@ -10,7 +10,7 @@ library(skimr)
 library(qs)
 
 # read preprocessed data ---
-validation_one_fil <- qs::qread("final_one_validation.qs")
+validation_one_fil <- qs::qread(file.path("objects", "final_one_validation.qs"))
 csf_data <- validation_one_fil$csf
 blood_data <- validation_one_fil$blood
 

@@ -11,7 +11,7 @@ library(qs)
 #all_data_one only one measurement per patient kept
 #patient_id - same for each patient 
 #sample_id - same for blood and CSF for a certain patient at a certain date
-validation_relative <- qs::qread("validation_relative.qs")
+validation_relative <- qs::qread(file.path("objects", "validation_relative.qs"))
 
 # filter based on admission date ------------------------------------------
 # remove all without admission date

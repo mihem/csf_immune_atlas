@@ -12,8 +12,8 @@ library(xgboost)
 options(tidymodels.dark = TRUE)
 
 # read in prepared data for analysis ----
-seu_csf_train <- qread("seu_csf_train.qs")
-seu_csf_test <- qread("seu_csf_test.qs")
+seu_csf_train <- qread(file.path("objects", "seu_csf_train.qs"))
+seu_csf_test <- qread(file.path("objects", "seu_csf_test.qs"))
 
 source("scripts/analysis/ml_izkf_utils.R")
 

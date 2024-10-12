@@ -79,7 +79,7 @@ blood_data <-
 all_data_one_fil <- list(csf = csf_data, blood = blood_data)
 qs::qsave(all_data_one_fil, "final_one_rel.qs")
 
-all_data_one_fil <- qs::qread("final_one_rel.qs")
+all_data_one_fil <- qs::qread(file.path("objects", "final_one_rel.qs"))
 csf_data <- all_data_one_fil$csf
 blood_data <- all_data_one_fil$blood
 

@@ -23,7 +23,7 @@ my_cols <- unname(Polychrome::createPalette(100, pals::cols25()))
 phmap_colors <- colorRampPalette(rev(brewer.pal(n = 8, name = "RdBu")))(100) #nice colors for pheatmap
 
 # read in prepared data for analysis ----
-combined_complete_norm <- qs::qread("final_one_rel_combined_norm_complete.qs")
+combined_complete_norm <- qs::qread(file.path("objects", "final_one_rel_combined_norm_complete.qs"))
 
 seu_data_blood <-
     combined_complete_norm |>

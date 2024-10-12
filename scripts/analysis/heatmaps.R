@@ -12,7 +12,7 @@ phmap_colors <- colorRampPalette(rev(brewer.pal(n = 8, name = "RdBu")))(100) #ni
 
 
 # load preprocessed data
-all_data_one_fil <- qs::qread("final_one_rel.qs")
+all_data_one_fil <- qs::qread(file.path("objects", "final_one_rel.qs"))
 csf_data <- all_data_one_fil$csf
 blood_data <- all_data_one_fil$blood
 

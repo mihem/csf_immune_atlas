@@ -7,7 +7,7 @@ library(patchwork)
 
 
 # read in data ---
-combined_complete_time <- qread("combined_complete_time.qs")
+combined_complete_time <- qread(file.path("objects", "combined_complete_time.qs"))
 source("scripts/analysis/ml_izkf_utils.R")
 
 vars_time <-

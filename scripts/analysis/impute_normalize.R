@@ -10,7 +10,7 @@ library(skimr)
 library(qs)
 
 # read preprocessed data ---
-all_data_one_fil <- qs::qread("final_one_rel.qs")
+all_data_one_fil <- qs::qread(file.path("objects", "final_one_rel.qs"))
 csf_data <- all_data_one_fil$csf
 blood_data <- all_data_one_fil$blood
 
@@ -205,7 +205,7 @@ ggsave(file.path("analysis", "relative", "qc", "histogram_blood_norm_imputed.pdf
 all_data_norm_complete <- list(csf = csf_norm_complete, blood = blood_norm_complete)
 qs::qsave(all_data_norm_complete, "final_one_rel_norm_complete.qs")
 
-all_data_norm_complete <- qread("final_one_rel_norm_complete.qs")
+all_data_norm_complete <- qread(file.path("objects", "final_one_rel_norm_complete.qs"))
 
 # combined
 #keep only those samples with complete csf and blood (note: all blood samples are complete after imputation)
@@ -271,9 +271,9 @@ ggsave(file.path("analysis", "relative", "qc", "histogram_combined_norm_imputed.
 qs::qsave(combined_norm_complete, "final_one_rel_combined_norm_complete.qs")
 
 # compare samples with blood only to samples finally used (matched CSF/blood samples with complete data)
-all_data_one_fil <- qs::qread("final_one_rel.qs")
+all_data_one_fil <- qs::qread(file.path("objects", "final_one_rel.qs"))
 
-combined_complete <- qs::qread("final_one_rel_combined_complete.qs")
+combined_complete <- qs::qread(file.path("objects", "final_one_rel_combined_complete.qs"))
 
 combined_complete_csf_blood <-
   combined_complete |>

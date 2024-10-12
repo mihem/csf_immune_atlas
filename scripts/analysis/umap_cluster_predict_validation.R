@@ -14,7 +14,7 @@ source("scripts/analysis/ml_izkf_utils.R")
 xgb_model <- qs::qread(file.path("analysis", "relative", "models", "cluster_xgb_model_datathin_res_0_5_final.qs"))
 
 # read in prepared data for analysis ----
-validation_combined <-  qs::qread("final_one_rel_combined_validation.qs")
+validation_combined <-  qs::qread(file.path("objects", "final_one_rel_combined_validation.qs"))
 
 # drop if important columns missing
 validation_combined <-

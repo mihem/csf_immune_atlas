@@ -11,7 +11,7 @@ source("scripts/analysis/ml_izkf_utils.R")
 phmap_colors <- colorRampPalette(rev(brewer.pal(n = 8, name = "RdBu")))(100) #nice colors for pheatmap
 
 # read in final data for analysis -------
-combined_complete <- qread("final_one_rel_combined_complete.qs")
+combined_complete <- qread(file.path("objects", "final_one_rel_combined_complete.qs"))
 
 # count categories ------
 sel_categories <- c("dx_icd_level1", "dx_icd_level2")

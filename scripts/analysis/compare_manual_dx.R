@@ -12,7 +12,7 @@ project <- "relative"
 phmap_colors <- colorRampPalette(rev(brewer.pal(n = 8, name = "RdBu")))(100) #nice colors for pheatmap
 
 # section read in final data for analysis ------------------------------------------
-combined_norm_complete <- qs::qread("final_one_rel_combined_norm_complete.qs")
+combined_norm_complete <- qs::qread(file.path("objects", "final_one_rel_combined_norm_complete.qs"))
 
 # compare with biobank  ------------------------------------------
 top_dx_icd_level2_manual <- c("somatoform", "multiple sclerosis", "dementia", "ischemic stroke", "Parkinson’s syndrome", "opticus neuritis", "transient ischemic attack", "viral encephalitis", "bacterial meningitis")
