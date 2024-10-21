@@ -127,7 +127,11 @@ ggsave(file.path("analysis", "relative", "correlation", "correlation_age_regress
 
 age_var <- c("HLA_DR_CD4_CSF", "HLA_DR_CD8_blood", "albumin_ratio", "dn_T_blood")
 
-lapply(age_var, corrPlot)
+lapply(
+  age_var,
+  function(x)
+    corrPlot(var = x, estimate_df = cor_age_regress_ctrl, plot_df = combined_ctrl_regress_age)
+)
 
 # sex ----
 #test normality

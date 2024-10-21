@@ -491,20 +491,35 @@ lm_fun <- function(data, var) {
 }
 
 #individul correlation plots of top variables ----
-corrPlot <- function(var) {
-  result <- dplyr::filter(cor_age_regress_ctrl, var == {{ var }})
-  combined_ctrl_regress_sex_norm |>
-    ggplot2::ggplot(aes(x = age, y = .data[[var]])) +
-    ggplot2::geom_point(size = 0.1, alpha = 0.5) +
-    ggplot2::geom_smooth(method = "lm", se = TRUE) +
-    ggplot2::theme_bw() +
-    ggplot2::ylab("z score") +
-    ggplot2::labs(
-      title = var,
-      subtitle = paste0("coeff: ", signif(result$estimate, 2), ", adjusted p: ", signif(result$p_adjust, 2))
-    )
-  ggplot2::ggsave(file.path("analysis", "relative", "correlation", paste0("correlation_ctrl_age_regress_", var, ".pdf")), width = 4, height = 4)
+corrPlot <- function(var, estimate_df, plot_df, output_dir = NULL) {
+    # Filter the data based on the variable
+    result <- dplyr::filter(estimate_df, var == {{ var }})
+    # Create the correlation plot
+    plot <-
+        plot_df |>
+        ggplot2::ggplot(ggplot2::aes(x = age, y = .data[[var]])) +
+        ggplot2::geom_point(size = 0.1, alpha = 0.5) +
+        ggplot2::geom_smooth(method = "lm", se = TRUE) +
+        ggplot2::theme_bw() +
+        ggplot2::ylab("z score") +
+        ggplot2::labs(
+            title = var,
+            subtitle = paste0("coeff: ", signif(result$estimate, 2), ", adjusted p: ", signif(result$p_adjust, 2))
+        )
+    # Save the plot to a PDF file
+    if (is.null(output_dir)) {
+        output_dir <- file.path("analysis", "relative", "relative")
+    }
+
+    file_path <- file.path(output_dir, glue::glue("correlation_ctrl_age_regress_{var}.pdf"))
+    if (is.null(output_dir)) {
+        output_dir <- file.path("analysis", "relative", "relative")
+    }
+
+    file_path <- file.path(output_dir, glue::glue("correlation_ctrl_age_regress_{var}.pdf"))
+    ggplot2::ggsave(file_path, plot, width = 4, height = 4)
 }
+
 
 # function for  wilcox test and algina keselman and penfield effect size (robust version of cohen's d)
 my_wilcox_test <- function(data, var) {
