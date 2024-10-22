@@ -49,5 +49,11 @@ phmap_csf_group_data |>
     facet_wrap(vars(variable), scales = "free", ncol = 4)
 ggsave(file.path("analysis", "relative", "qc", "histogram_csf_norm_mean.pdf"), width = 10, height = 30)
 
-
-heatmap_group_csf(category = "dx_icd_level1", data =  csf_data, label = "CSF", cutree_rows = 4, height = 5)
+heatmap_group_csf(
+    category = "dx_icd_level1",
+    data = csf_data,
+    label = "CSF",
+    cutree_rows = 4,
+    height = 5,
+    output_dir = file.path("analysis", "relative", "heatmap")
+)

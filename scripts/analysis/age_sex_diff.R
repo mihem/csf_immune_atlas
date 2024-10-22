@@ -129,8 +129,18 @@ age_var <- c("HLA_DR_CD4_CSF", "HLA_DR_CD8_blood", "albumin_ratio", "dn_T_blood"
 
 lapply(
   age_var,
-  function(x)
-    corrPlot(var = x, estimate_df = cor_age_regress_ctrl, plot_df = combined_ctrl_regress_age)
+  function(x) {
+    corrPlot(
+      var = x,
+      estimate_df = cor_age_regress_ctrl,
+      plot_df = combined_ctrl_regress_age,
+      output_dir = file.path(
+        "analysis",
+        "relative",
+        "correlation"
+      )
+    )
+  }
 )
 
 # sex ----
@@ -176,7 +186,17 @@ ggsave(file.path("analysis", "relative", "correlation", "stat_sex_regress_ctrl.p
 
 sex_vars <- c("T_blood", "albumin_CSF", "IgG_CSF")
 
-lapply(sex_vars, compSex)
+lapply(
+  sex_vars,
+  function(x) {
+    compSex(
+      var = x,
+      estimate_df = stat_sex_regress_ctrl,
+      plot_df = combined_ctrl_regress_sex,
+      output_dir = "analysis/relative/correlation"
+    )
+  }
+)
 
 # igg ratio has an outlier that is not plausible
 result_igg <- dplyr::filter(stat_sex_regress_ctrl, var == "IgG_ratio")

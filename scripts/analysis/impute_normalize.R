@@ -319,7 +319,17 @@ vars_compare <-
   select(granulos:HLA_DR_T) |>
   names()
 
-comparisons_only_blood_plots <- lapply(vars_compare, compBoxplot)
+comparisons_only_blood_plots <-
+  lapply(
+    vars_compare,
+    function(x) {
+      compBoxplot(
+        par = x,
+        df = comarison_only_blood
+      )
+    }
+  )
+
 comparsions_only_blood_patch <- patchwork::wrap_plots(comparisons_only_blood_plots, ncol = 4)
 
 ggsave(

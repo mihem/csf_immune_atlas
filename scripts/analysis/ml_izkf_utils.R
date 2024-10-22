@@ -100,44 +100,45 @@ count_category <- function(data, category) {
         readr::write_csv(file.path("analysis", "relative", "categories", glue::glue("count_{category}.csv")))
 }
 
-plot_category <- function(data, category, width, height) {
-    data |>
-        count(.data[[category]]) |>
-        drop_na() |>
-        ggplot(aes(x = reorder(.data[[category]], n), y = n, fill = .data[[category]])) +
-        geom_col() +
-        xlab(NULL) +
-        ylab(NULL) +
-        theme_bw() +
-        theme(
+plot_category <- function(data, category, width, height, output_dir) {
+    plot <- dplyr::count(data, .data[[category]]) |>
+        tidyr::drop_na() |>
+        ggplot2::ggplot(ggplot2::aes(x = stats::reorder(.data[[category]], n), y = n, fill = .data[[category]])) +
+        ggplot2::geom_col() +
+        ggplot2::xlab(NULL) +
+        ggplot2::ylab(NULL) +
+        ggplot2::theme_bw() +
+        ggplot2::theme(
             legend.position = "none",
-            axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)
+            axis.text.x = ggplot2::element_text(angle = 90, vjust = 0.5, hjust = 1)
         ) +
-        coord_flip()
-        data_quo <- deparse(substitute(data))
-    ggsave(file.path("analysis", "relative", "categories", glue::glue("count_{category}_{data_quo}.pdf")), width = width, height = height, device = cairo_pdf)
+        ggplot2::coord_flip()
+    data_quo <- deparse(substitute(data))
+    file_path <- file.path(output_dir, glue::glue("count_{category}_{data_quo}.pdf"))
+    ggplot2::ggsave(file_path, plot = plot, width = width, height = height, device = cairo_pdf)
 }
 
 #function to create csf heatmap for grouped mean
-heatmap_group_csf <- function(category, data, label, cutree_rows, height, transform = FALSE, cutree_cols = 8) {
-formula <- paste0(category, "~", ".")
-phmap_data_norm <- data |>
-    select(.data[[category]], granulos:lactate) |>
-    drop_na(.data[[category]]) |>
-    recipes::recipe(as.formula(formula)) |>
-    bestNormalize::step_orderNorm(recipes::all_numeric()) |>
-    recipes::prep() |>
-    recipes::bake(new_data = NULL) |>
-    group_by(.data[[category]]) |>
-    dplyr::summarize(across(granulos:lactate, mean, na.rm = TRUE)) |>
-    column_to_rownames(var = category)
+heatmap_group_csf <- function(category, data, label, cutree_rows, height, transform = FALSE, cutree_cols = 8, output_dir = NULL) {
+    formula <- paste0(category, "~", ".")
+    phmap_data_norm <- data |>
+        dplyr::select(category, granulos:lactate) |>
+        tidyr::drop_na(all_of(category)) |>
+        recipes::recipe(stats::as.formula(formula)) |>
+        bestNormalize::step_orderNorm(recipes::all_numeric()) |>
+        recipes::prep() |>
+        recipes::bake(new_data = NULL) |>
+        dplyr::group_by(.data[[category]]) |>
+        dplyr::summarize(dplyr::across(granulos:lactate, function(x) mean(x, na.rm = TRUE))) |>
+        tibble::column_to_rownames(var = category)
 
+    phmap_colors <- grDevices::colorRampPalette(rev(RColorBrewer::brewer.pal(n = 8, name = "RdBu")))(100)
 
-if (transform == TRUE) {
-    phmap_data_norm <- t(phmap_data_norm)
-}
+    if (transform == TRUE) {
+        phmap_data_norm <- t(phmap_data_norm)
+    }
 
-phmap_group <- pheatmap::pheatmap(phmap_data_norm,
+    phmap_group <- pheatmap::pheatmap(phmap_data_norm,
         color = phmap_colors,
         scale = "none",
         main = label,
@@ -151,10 +152,11 @@ phmap_group <- pheatmap::pheatmap(phmap_data_norm,
         clustering_distance_rows = "euclidean",
         clustering_method = "ward.D2",
         border_color = NA
-         )
-grDevices::cairo_pdf(file.path("analysis", "relative", "heatmap", glue::glue("hmap_{label}_{category}.pdf")), width = 12, height = height)
-print(phmap_group)
-dev.off()
+    )
+    file_path <- file.path(output_dir, glue::glue("hmap_{label}_{category}.pdf"))
+    grDevices::cairo_pdf(file_path, width = 12, height = height)
+    print(phmap_group)
+    grDevices::dev.off()
 }
 
 #function to create csf heatmap for individual
@@ -400,29 +402,32 @@ return(res_tibble)
 
 
 #function to create an abundance plot of the clusters based on soupx
-abundanceCategoryPlot <- function(data, cluster) {
-  data_plot <-
-    data |>
-    dplyr::rename(variable = gene) |>
-    dplyr::mutate(qval = -log10(qval))|>
-    ## dplyr::filter(tfidf > 0.2) |>
-    ## dplyr::filter(qval > -log10(0.01)) |>
-    dplyr::filter(cluster == {{cluster}})
+abundanceCategoryPlot <- function(data, cluster, output_dir) {
+    data_plot <- dplyr::rename(data, variable = gene) |>
+        dplyr::mutate(qval = -log10(qval)) |>
+        dplyr::filter(cluster == {{ cluster }})
 
-  height <- 1.5 + nrow(data_plot) * 0.1
+    # Calculate the height of the plot based on the number of rows in the data.
+    height <- 1.5 + nrow(data_plot) * 0.1
 
-  plot <-
-    data_plot |>
-    ggplot(aes(x = qval, y = reorder(variable, qval), fill = tfidf)) +
-    geom_col() +
-    viridis::scale_fill_viridis() +
-    theme_classic() +
-    theme(panel.border = element_rect(color = "black", size = 1, fill = NA)) +
-    labs(x = bquote(~-Log[10]~ "qval"), y = "", fill = "TF-IDF", title = cluster)
-  ggsave(file.path("analysis", "relative", "abundance", paste0("barplot_soupx_", deparse(substitute(data)), "_cluster_", cluster, ".pdf")),
-         width = 6,
-         height = height,
-         device = cairo_pdf)
+    # Create the barplot.
+    plot <- data_plot |>
+        ggplot2::ggplot(ggplot2::aes(x = qval, y = stats::reorder(variable, qval), fill = tfidf)) +
+        ggplot2::geom_col() +
+        viridis::scale_fill_viridis() +
+        ggplot2::theme_classic() +
+        ggplot2::theme(panel.border = ggplot2::element_rect(color = "black", linewidth = 1, fill = NA)) +
+        ggplot2::labs(x = bquote(~ -Log[10] ~ "qval"), y = "", fill = "TF-IDF", title = cluster)
+
+    # Save the plot to a PDF file.
+    data_quo <- deparse(substitute(data))
+    file_path <- file.path(output_dir, glue::glue("barplot_soupx_{data_quo}_cluster_{cluster}.pdf"))
+
+    ggplot2::ggsave(file.path(file_path),
+        width = 6,
+        height = height,
+        device = grDevices::cairo_pdf
+    )
 }
 
 
@@ -491,7 +496,7 @@ lm_fun <- function(data, var) {
 }
 
 #individul correlation plots of top variables ----
-corrPlot <- function(var, estimate_df, plot_df, output_dir = NULL) {
+corrPlot <- function(var, estimate_df, plot_df, output_dir) {
     # Filter the data based on the variable
     result <- dplyr::filter(estimate_df, var == {{ var }})
     # Create the correlation plot
@@ -507,18 +512,10 @@ corrPlot <- function(var, estimate_df, plot_df, output_dir = NULL) {
             subtitle = paste0("coeff: ", signif(result$estimate, 2), ", adjusted p: ", signif(result$p_adjust, 2))
         )
     # Save the plot to a PDF file
-    if (is.null(output_dir)) {
-        output_dir <- file.path("analysis", "relative", "relative")
-    }
-
-    file_path <- file.path(output_dir, glue::glue("correlation_ctrl_age_regress_{var}.pdf"))
-    if (is.null(output_dir)) {
-        output_dir <- file.path("analysis", "relative", "relative")
-    }
-
     file_path <- file.path(output_dir, glue::glue("correlation_ctrl_age_regress_{var}.pdf"))
     ggplot2::ggsave(file_path, plot, width = 4, height = 4)
 }
+
 
 
 # function for  wilcox test and algina keselman and penfield effect size (robust version of cohen's d)
@@ -530,26 +527,34 @@ my_wilcox_test <- function(data, var) {
   return(res)
 }
 
-compSex <- function(var) {
-result <- dplyr::filter(stat_sex_regress_ctrl, var == {{ var }})
-combined_ctrl_regress_age |>
-  ggplot2::ggplot(aes(x = sex, y = .data[[var]])) +
-  ggplot2::geom_boxplot() +
-  ggplot2::theme_bw() +
-    ggplot2::labs(
-      title = var,
-      subtitle = paste0("effect: ", signif(result$akp_effect, 2), ", adjusted p: ", signif(result$p_adjust, 2))) +
-    ggplot2::ylab("")
-ggplot2::ggsave(file.path("analysis", "relative", "correlation", paste0("stat_sex_regress_", var, ".pdf")), width = 3, height = 4)
+compSex <- function(var, estimate_df, plot_df, output_dir) {
+    # Filter the estimates data frame for the given variable
+    result <- dplyr::filter(estimate_df, var == {{ var }})
+    
+    # Create a boxplot comparing the variable between sexes
+    plot <- plot_df |>
+        ggplot2::ggplot(ggplot2::aes(x = sex, y = .data[[var]])) +
+        ggplot2::geom_boxplot() +
+        ggplot2::theme_bw() +
+        ggplot2::labs(
+            title = var,
+            subtitle = paste0("effect: ", signif(result$akp_effect, 2), ", adjusted p: ", signif(result$p_adjust, 2))
+        ) +
+        ggplot2::ylab("")
+    
+    # Construct the file path and save the plot
+    file_path <- file.path(output_dir, glue::glue("correlation_stat_sex_regress_{var}.pdf"))
+    ggplot2::ggsave(file_path, plot, width = 3, height = 4)
 }
 
-compBoxplot <- function(par) {
-  comparison_only_blood |>
-    ggplot(aes(x = group, y = .data[[par]], fill = group)) +
-    geom_boxplot() +
-    theme_bw() +
-    xlab("") + 
-    theme(legend.position = "none") 
+
+compBoxplot <- function(par, df) {
+    df |>
+        ggplot2::ggplot(ggplot2::aes(x = group, y = .data[[par]], fill = group)) +
+        ggplot2::geom_boxplot() +
+        ggplot2::theme_bw() +
+        ggplot2::xlab("") +
+        ggplot2::theme(legend.position = "none")
 }
 
 

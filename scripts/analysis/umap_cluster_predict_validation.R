@@ -22,7 +22,13 @@ validation_combined <-
     drop_na(granulos_CSF, cell_count_CSF) 
 
 # plot validation data
-plot_category(data = validation_combined, category = "dx_icd_level2", width = 7, height = 7)
+plot_category(
+    data = validation_combined,
+    category = "dx_icd_level2",
+    width = 7,
+    height = 7,
+    output_dir = file.path("analysis", "relative", "categories")
+)
 
 # Replace "_" with "-" in column names to match xgb model
 names(validation_combined) <- gsub(x = names(validation_combined), pattern = "_", replacement = "-")
@@ -56,4 +62,13 @@ abundance_validation_combined_soupx_csf_datathin <-
     mutate(gene = gsub(x = gene, pattern = "\\.", replacement = " ")) |>
     mutate(gene = gsub(x = gene, pattern = "opticus neuritis", replacement = "optic neuritis"))
 
-lapply(unique(pred_cluster), abundanceCategoryPlot, data = abundance_validation_combined_soupx_csf_datathin)
+lapply(
+    unique(pred_cluster),
+    function(x) {
+        abundanceCategoryPlot(
+            cluster = x,
+            data = abundance_validation_combined_soupx_csf_datathin,
+            ouput_dir = file.path("analysis", "relative", "abundance"),
+        )
+    }
+)

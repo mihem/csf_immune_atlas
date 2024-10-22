@@ -17,8 +17,20 @@ combined_complete <- qread(file.path("objects", "final_one_rel_combined_complete
 sel_categories <- c("dx_icd_level1", "dx_icd_level2")
 lapply(sel_categories, count_category, data = combined_complete)
 
-plot_category(data = combined_complete, category = "dx_icd_level1", width = 4, height = 2)
-plot_category(data = combined_complete, category = "dx_icd_level2", width = 7, height = 7)
+plot_category(
+  data = combined_complete,
+  category = "dx_icd_level1",
+  width = 4,
+  height = 2,
+  output_dir = file.path("analysis", "relative", "categories")
+)
+plot_category(
+  data = combined_complete,
+  category = "dx_icd_level2",
+  width = 7,
+  height = 7,
+  output_dir = file.path("analysis", "relative", "categories")
+)
 
 # age sex histograms ------------------------------------------
 sex_age_histogram <-

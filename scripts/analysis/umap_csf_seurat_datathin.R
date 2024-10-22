@@ -267,7 +267,17 @@ abundance_combined_soupx_csf_norm_datathin <-
     mutate(gene = gsub(x = gene, pattern = "\\.", replacement = " ")) |>
     mutate(gene = gsub(x = gene, pattern = "opticus neuritis", replacement = "optic neuritis"))
 
-lapply(unique(seu_csf_train$cluster), abundanceCategoryPlot, data = abundance_combined_soupx_csf_norm_datathin)
+lapply(
+    unique(seu_csf_train$cluster),
+    function(x) {
+        abundanceCategoryPlot(
+            cluster = x,
+            data = abundance_combined_soupx_csf_norm_datathin,
+            ouput_dir = file.path("analysis", "relative", "abundance"),
+        )
+    }
+)
+
 
 # find markers ----
 seu_markers_csf <-

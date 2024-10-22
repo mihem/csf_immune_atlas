@@ -77,10 +77,19 @@ abundance_combined_soupx_csf_biobanklist_level2_ms_adjusted <-
     mutate(gene = gsub(x = gene, pattern = "\\.", replacement = " ")) |>
     mutate(gene = gsub(x = gene, pattern = "opticus neuritis", replacement = "optic neuritis"))
 
-lapply(cluster_of_interest, abundanceCategoryPlot, data = abundance_combined_soupx_csf_biobanklist_level2_ms_adjusted)
+lapply(
+    cluster_of_interest,
+    function(x) {
+        abundanceCategoryPlot(
+            cluster = x,
+            data = abundance_combined_soupx_csf_biobanklist_level2_ms_adjusted,
+            ouput_dir = file.path("analysis", "relative", "abundance"),
+        )
+    }
+)
 
 # MS EDSS -----
-ms_edss <-  
+ms_edss <-
     qs::qread(file.path("objects", "ms_edss.qs")) |>
     dplyr::mutate(cluster = if_else(cluster == "CNS autoimmune", "CNS autoimmune", "other"))
 
