@@ -11,6 +11,8 @@ library(RColorBrewer)
 library(Polychrome)
 library(survminer)
 library(survival)
+library(lme4)
+library(emmeans)
 
 # read in custom functions ----
 source("scripts/analysis/ml_izkf_utils.R")
@@ -270,3 +272,48 @@ surv_plot <-
 pdf(file = file.path("analysis", "relative", "survival", "survival_plot.pdf"), width = 5, height = 5)
 print(surv_plot, newpage = FALSE)
 dev.off()
+
+# categorize intervals
+# remove negative intervals and large intervals because of imbalances between clusters
+np_dementia_mmse_interval <-
+    np_dementia_longitudinal_mmse_adjusted |>
+    dplyr::filter(interval > 0) |>
+    mutate(interval_cut = case_when(
+        interval < 10 ~ "0-10",
+        interval < 30 ~ "10-30",
+        interval < 50 ~ "30-50",
+        TRUE ~ "50+"
+    )) |>
+    select(pid, interval, interval_cut, score_abs, cluster)
+
+np_dementia_longitudinal_mmse_adjusted |>
+    filter(interval > 30) |>
+    select(cluster, interval) |>
+    arrange(cluster) |>
+    print(n = Inf) 
+
+# Fit a mixed-effects model
+model <- lmer(score_abs ~ cluster * interval_cut + (1 | pid), data = np_dementia_mmse_interval)
+summary(model)
+# significant decrease in MMSE score for neurodegenerative for interval 30+ p < 0.001
+
+# Post-hoc comparisons
+pairwise <- emmeans(model, pairwise ~ cluster | interval_cut, adjust = "sidak")
+
+# significant difference in MMSE score neurodegenerative cluster vs other at interval 30+
+np_dementia_mmse_interval_plot <-
+    np_dementia_mmse_interval |>
+    ggplot(aes(x = cluster, y = score_abs)) +
+    geom_boxplot(aes(fill = cluster)) +
+    geom_jitter(width = 0.3, height = 0, size = .7, shape = 21, aes(fill = cluster)) +
+    facet_grid(col = vars(interval_cut)) +
+    theme_bw() +
+    xlab("") + 
+    ylab("MMSE score") +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+
+ggsave(
+    np_dementia_mmse_interval_plot,
+    filename = file.path("analysis", "relative", "boxplots", "mmse_interval.pdf"),
+    width = 6,
+    height = 5)
