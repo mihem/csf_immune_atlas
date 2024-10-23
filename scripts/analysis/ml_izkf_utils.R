@@ -559,37 +559,43 @@ compBoxplot <- function(par, df) {
 
 
 # stability metric to determine best resolution
-stabilityFunCSF <- function(t) {
+stabilityCSF <- function(t, df, vars_cont, vars_cat, normal_estimate, weibull_estimate, ndim) {
+    # Set the seed for reproducibility
     set.seed(t)
-    data_thin1 <- datathin(combined_complete_norm[csf_vars_cont], family = "normal", K = 2, arg = variance_datathin)
+    
+    # Create the data
+    data_thin1 <- datathin::datathin(df[vars_cont], family = "normal", K = 2, arg = normal_estimate)
     set.seed(t)
-    data_thin2 <- datathin(combined_complete_norm[csf_vars_cat] + 1, family = "weibull", K = 2, arg = weibull_datathin)
+    data_thin2 <- datathin::datathin(df[vars_cat] + 1, family = "weibull", K = 2, arg = weibull_estimate)
     data_thin <- abind::abind(data_thin1, data_thin2, along = 2)
     data_train <- data_thin[, , 1]
     data_test <- data_thin[, , 2]
+    
+    # Create the Seurat objects
     seu_csf_train <- Seurat::CreateSeuratObject(t(data_train))
     seu_csf_test <- Seurat::CreateSeuratObject(t(data_test))
+    
+    # Preprocess the data
     seu_csf_train$RNA$data <- seu_csf_train$RNA$counts
     seu_csf_test$RNA$data <- seu_csf_test$RNA$counts
-    seu_csf_train <-
-        seu_csf_train |>
-        Seurat::FindVariableFeatures() |>
-        Seurat::ScaleData() |>
-        Seurat::RunPCA() |>
-        Seurat::FindNeighbors(dims = 1:30)
-    seu_csf_test <-
-        seu_csf_test |>
-        Seurat::FindVariableFeatures() |>
-        Seurat::ScaleData() |>
-        Seurat::RunPCA() |>
-        Seurat::FindNeighbors(dims = 1:30)
+
+    seu_csf_train <- Seurat::FindVariableFeatures(seu_csf_train)
+    seu_csf_train <- Seurat::ScaleData(seu_csf_train)
+    seu_csf_train <- Seurat::RunPCA(seu_csf_train)
+    seu_csf_train <- Seurat::FindNeighbors(seu_csf_train, dims = 1:ndim)
+
+    seu_csf_test <- Seurat::FindVariableFeatures(seu_csf_test)
+    seu_csf_test <- Seurat::ScaleData(seu_csf_test)
+    seu_csf_test <- Seurat::RunPCA(seu_csf_test)
+    seu_csf_test <- Seurat::FindNeighbors(seu_csf_test, dims = 1:ndim)
+    # Calculate the stability at different resolutions
     resRange <- seq(0.2, 1.2, by = 0.1)
     resNames <- paste0("RNA_snn_res.", resRange)
     for (res in resRange) {
-        seu_csf_train <- FindClusters(seu_csf_train, resolution = res)
+        seu_csf_train <- Seurat::FindClusters(seu_csf_train, resolution = res)
     }
     for (res in resRange) {
-        seu_csf_test <- FindClusters(seu_csf_test, resolution = res)
+        seu_csf_test <- Seurat::FindClusters(seu_csf_test, resolution = res)
     }
     stability_res <- list()
     for (k in resNames) {
@@ -600,6 +606,7 @@ stabilityFunCSF <- function(t) {
     }
     return(unlist(stability_res))
 }
+
 
 # function to plot confusion matrix ----
 plotConfMat <- function(last_fit, name) {

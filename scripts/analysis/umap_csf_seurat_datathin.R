@@ -179,7 +179,22 @@ seu_csf_test <-
 
 qsave(seu_csf_test, "seu_csf_test.qs")
 
-stability_res <- map_dfr(1:10, stabilityFunCSF)
+stability_res <- 
+    map_dfr(
+        1:10,
+        function(x) {
+            stabilityCSF(
+                t = x,
+                df = combined_complete_norm,
+                vars_cont = csf_vars_cont,
+                vars_cat = csf_vars_cont,
+                normal_estimate = variance_datathin,
+                weibull_estimate = weibull_datathin,
+                ndim = 30
+            )
+        }
+
+    )
 
 # plot stability metric ----
 stability_df <-
