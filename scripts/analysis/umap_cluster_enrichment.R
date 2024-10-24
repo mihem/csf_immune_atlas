@@ -318,11 +318,11 @@ np_dementia_mmse_interval_plot <-
     facet_grid(col = vars(interval_cut)) +
     theme_bw() +
     xlab("") + 
-    ylab("MMSE score") +
-    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+    ylab("age-adjusted MMSE score") +
+    theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
 
 ggsave(
     np_dementia_mmse_interval_plot,
     filename = file.path("analysis", "relative", "boxplots", "mmse_interval.pdf"),
     width = 6,
-    height = 5)
+    height = 3)
