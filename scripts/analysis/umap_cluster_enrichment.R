@@ -249,41 +249,6 @@ np_dementia_longitudinal_mmse_adjusted <-
 select(np_dementia_longitudinal_mmse, age, score_abs)
 select(np_dementia_longitudinal_mmse_adjusted, age, score_abs)
 
-# plot longitudinal MMSE line plots
-line_plot_dementia_longitudinal_mmse(data = np_dementia_longitudinal_mmse_adjusted, cluster_selected = "neurodegenerative")
-line_plot_dementia_longitudinal_mmse(data = np_dementia_longitudinal_mmse_adjusted, cluster_selected = "other")
-
-event_threshold <- 18
-
-np_dementia_survival <-
-    np_dementia_longitudinal_mmse_adjusted |>
-    mutate(event = ifelse(score_abs < event_threshold, 1, 0)) |>
-    group_by(pid) |>
-    summarize(time = max(interval), status = max(event), cluster = dplyr::first(cluster), age = max(age)) |>
-    dplyr::filter(time >= 0) |>
-    arrange(pid)
-
-# perform survival analysis
-surv_fit <- survfit(Surv(time, status) ~ cluster, data = np_dementia_survival)
-
-surv_plot <-
-    ggsurvplot(
-        surv_fit,
-        data = np_dementia_survival,
-        size = 1, 
-        conf.int = TRUE, 
-        legend.labs =
-            c("neurodegenerative", "other"), 
-        ggtheme = theme_bw(),
-        break.time.by = 10,
-        xlim = c(-50, 100)
-    )
-
-
-pdf(file = file.path("analysis", "relative", "survival", "survival_plot.pdf"), width = 5, height = 5)
-print(surv_plot, newpage = FALSE)
-dev.off()
-
 # categorize intervals
 # remove negative intervals and large intervals because of imbalances between clusters
 np_dementia_mmse_interval <-
@@ -306,7 +271,6 @@ np_dementia_longitudinal_mmse_adjusted |>
 # Fit a mixed-effects model
 model <- lmer(score_abs ~ cluster * interval_cut + (1 | pid), data = np_dementia_mmse_interval)
 summary(model)
-# significant decrease in MMSE score for neurodegenerative for interval 30+ p < 0.001
 
 # Post-hoc comparisons
 pairwise <- emmeans(model, pairwise ~ cluster | interval_cut)
