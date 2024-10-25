@@ -114,7 +114,8 @@ lapply(
         boxplot_cluster_manual(
             data = ms_edss_adjusted,
             test_name = x,
-            file_name = "ms_edss_adjusted"
+            file_name = "ms_edss_adjusted",
+            output_dir = file.path("analysis", "relative", "boxplots")
         )
     }
 )
@@ -207,7 +208,8 @@ lapply(
         boxplot_cluster_manual(
             data = patients_cluster_dementia_manual_mmse_adjusted,
             test_name = x,
-            file_name = "dementia_adjusted"
+            file_name = "dementia_adjusted",
+            output_dir = file.path("analysis", "relative", "boxplots")
         )
     }
 )

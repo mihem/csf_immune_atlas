@@ -671,45 +671,6 @@ stabilityBlood <- function(t, df, vars_cont, normal_estimate, ndim) {
     return(unlist(stability_res))
 }
 
-# stability metric to determine best resolution
-stabilityFunBlood <- function(t) {
-    set.seed(t)
-    data_thin <- datathin(combined_complete_norm[blood_vars_cont], family = "normal", K = 2, arg = variance_datathin)
-    data_train <- data_thin[, , 1]
-    data_test <- data_thin[, , 2]
-    seu_blood_train <- Seurat::CreateSeuratObject(t(data_train))
-    seu_blood_test <- Seurat::CreateSeuratObject(t(data_test))
-    seu_blood_train$RNA$data <- seu_blood_train$RNA$counts
-    seu_blood_test$RNA$data <- seu_blood_test$RNA$counts
-    seu_blood_train <-
-        seu_blood_train |>
-        Seurat::FindVariableFeatures() |>
-        Seurat::ScaleData() |>
-        Seurat::RunPCA() |>
-        Seurat::FindNeighbors(dims = 1:20)
-    seu_blood_test <-
-        seu_blood_test |>
-        Seurat::FindVariableFeatures() |>
-        Seurat::ScaleData() |>
-        Seurat::RunPCA() |>
-        Seurat::FindNeighbors(dims = 1:20)
-    resRange <- seq(0.2, 1.2, by = 0.1)
-    resNames <- paste0("RNA_snn_res.", resRange)
-    for (res in resRange) {
-        seu_blood_train <- FindClusters(seu_blood_train, resolution = res)
-    }
-    for (res in resRange) {
-        seu_blood_test <- FindClusters(seu_blood_test, resolution = res)
-    }
-    stability_res <- list()
-    for (k in resNames) {
-        stability_res[k] <- mclust::adjustedRandIndex(
-            seu_blood_train@meta.data[[k]],
-            seu_blood_test@meta.data[[k]]
-        )
-    }
-    return(unlist(stability_res))
-}
 
 TimePlot <- function(data, var, size, span) {
     mean <- mean(data[[var]], na.rm = TRUE)
@@ -726,14 +687,13 @@ TimePlot <- function(data, var, size, span) {
     return(plot)
 }
 
-# boxplot for cluster enrichment based on clinical scores/tests
-boxplot_cluster_manual <- function(data, test_name, file_name) {
+boxplot_cluster_manual <- function(data, test_name, file_name, output_dir) {
     formula <- paste0(test_name, "~", "cluster")
     stat <-
         data |>
-        wilcox.test(as.formula(formula), data = _) |>
+        stats::wilcox.test(stats::as.formula(formula), data = _) |>
         broom::tidy() |>
-        mutate(p.symbol = as.character(symnum(p.value, corr = FALSE, na = FALSE, cutpoints = c(0, 0.001, 0.01, 0.05, 1), symbols = c("***", "**", "*", ""))))
+        dplyr::mutate(p.symbol = as.character(stats::symnum(p.value, corr = FALSE, na = FALSE, cutpoints = c(0, 0.001, 0.01, 0.05, 1), symbols = c("***", "**", "*", ""))))
 
     stats_list <- vector("list")
     stats_list$annotation <- stat$p.symbol
@@ -741,21 +701,22 @@ boxplot_cluster_manual <- function(data, test_name, file_name) {
 
     plot <-
         data |>
-        ggplot(aes(x = cluster, y = .data[[test_name]], fill = cluster)) +
-        geom_boxplot() +
-        geom_jitter(width = 0.3, height = 0, size = .7, shape = 21, aes(fill = cluster)) +
-        theme_bw() +
-        xlab("") +
-        ylab(test_name) +
-        theme(legend.position = "none") +
-        theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
+        ggplot2::ggplot(ggplot2::aes(x = cluster, y = .data[[test_name]], fill = cluster)) +
+        ggplot2::geom_boxplot() +
+        ggplot2::geom_jitter(width = 0.3, height = 0, size = .7, shape = 21, ggplot2::aes(fill = cluster)) +
+        ggplot2::theme_bw() +
+        ggplot2::xlab("") +
+        ggplot2::ylab(test_name) +
+        ggplot2::theme(legend.position = "none") +
+        ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 90, vjust = 0.5, hjust = 1)) +
         if (stat$p.value < 0.05) {
             ggsignif::geom_signif(comparisons = stats_list$comparisons, annotation = stats_list$annotation, textsize = 5, step_increase = 0.05, vjust = 0.7)
         }
 
-    ggsave(
+    file_path <- file.path(output_dir, glue::glue("patients_cluster_manual_{file_name}_{test_name}.pdf"))
+    ggplot2::ggsave(
+        file_path,
         plot,
-        filename = file.path("analysis", "relative", "boxplots", paste0("patients_cluster_manual_", file_name, "_", test_name, ".pdf")),
         width = 2,
         height = 5
     )
