@@ -307,7 +307,7 @@ summary(model)
 # significant decrease in MMSE score for neurodegenerative for interval 30+ p < 0.001
 
 # Post-hoc comparisons
-pairwise <- emmeans(model, pairwise ~ cluster | interval_cut, adjust = "sidak")
+pairwise <- emmeans(model, pairwise ~ cluster | interval_cut)
 
 # significant difference in MMSE score neurodegenerative cluster vs other at interval 30+
 np_dementia_mmse_interval_plot <-

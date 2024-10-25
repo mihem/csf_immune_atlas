@@ -623,6 +623,54 @@ plotConfMat <- function(last_fit, name) {
   ggsave(file.path("analysis", "relative", "models", glue::glue("{name}_xgb_conf_mat.pdf")), width = 5, height = 5)
 }
 
+stabilityBlood <- function(t, df, vars_cont, normal_estimate, ndim) {
+    # Set the seed for reproducibility
+    set.seed(t)
+    
+    # Create the data
+    data_thin <- datathin::datathin(df[vars_cont], family = "normal", K = 2, arg = normal_estimate)
+    data_train <- data_thin[, , 1]
+    data_test <- data_thin[, , 2]
+    
+    # Create the Seurat objects
+    seu_blood_train <- Seurat::CreateSeuratObject(t(data_train))
+    seu_blood_test <- Seurat::CreateSeuratObject(t(data_test))
+    
+    # Preprocess the data
+    seu_blood_train$RNA$data <- seu_blood_train$RNA$counts
+    seu_blood_test$RNA$data <- seu_blood_test$RNA$counts
+
+    seu_blood_train <- seu_blood_train |>
+        Seurat::FindVariableFeatures() |>
+        Seurat::ScaleData() |>
+        Seurat::RunPCA() |>
+        Seurat::FindNeighbors(dims = 1:ndim)
+
+    seu_blood_test <- seu_blood_test |>
+        Seurat::FindVariableFeatures() |>
+        Seurat::ScaleData() |>
+        Seurat::RunPCA() |>
+        Seurat::FindNeighbors(dims = 1:ndim)
+    
+    # Calculate the stability at different resolutions
+    resRange <- seq(0.2, 1.2, by = 0.1)
+    resNames <- paste0("RNA_snn_res.", resRange)
+    for (res in resRange) {
+        seu_blood_train <- Seurat::FindClusters(seu_blood_train, resolution = res)
+    }
+    for (res in resRange) {
+        seu_blood_test <- Seurat::FindClusters(seu_blood_test, resolution = res)
+    }
+    stability_res <- list()
+    for (k in resNames) {
+        stability_res[k] <- mclust::adjustedRandIndex(
+            seu_blood_train@meta.data[[k]],
+            seu_blood_test@meta.data[[k]]
+        )
+    }
+    return(unlist(stability_res))
+}
+
 # stability metric to determine best resolution
 stabilityFunBlood <- function(t) {
     set.seed(t)

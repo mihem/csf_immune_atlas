@@ -123,8 +123,21 @@ seu_blood_test <-
 
 qsave(seu_blood_test, "seu_blood_test.qs")
 
+stability_res <- 
+    map_dfr(
+        1:10,
+        function(x) {
+            stabilityBlood(
+                t = x,
+                df = combined_complete_norm,
+                vars_cont = blood_vars_cont,
+                normal_estimate = variance_datathin,
+                ndim = 20
+            )
+        }
 
-stability_res <- map_dfr(1:10, stabilityFunBlood)
+    )
+
 
 # plot stability metric ----
 stability_df <-
