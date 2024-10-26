@@ -90,6 +90,42 @@
       ],
       "Hash": "2ecaed86684f5fae76ed5530f9d29c4a"
     },
+    "CSFAtlasTools": {
+      "Package": "CSFAtlasTools",
+      "Version": "1.0.0",
+      "Source": "GitHub",
+      "RemoteType": "github",
+      "RemoteHost": "api.github.com",
+      "RemoteUsername": "mihem",
+      "RemoteRepo": "CSFAtlasTools",
+      "RemoteRef": "main",
+      "RemoteSha": "fea0beb8d9980ab2e7a6b6472ff539efdefaa212",
+      "Remotes": "anna-neufeld/datathin",
+      "Requirements": [
+        "RColorBrewer",
+        "Seurat",
+        "WRS2",
+        "abind",
+        "bestNormalize",
+        "broom",
+        "datathin",
+        "dplyr",
+        "ggplot2",
+        "ggsignif",
+        "glue",
+        "grDevices",
+        "mclust",
+        "pheatmap",
+        "readr",
+        "recipes",
+        "tibble",
+        "tidyr",
+        "tune",
+        "viridis",
+        "yardstick"
+      ],
+      "Hash": "cbbf43ed68932ef227cb506a03c5d8fb"
+    },
     "DBI": {
       "Package": "DBI",
       "Version": "1.2.2",
@@ -1183,9 +1219,9 @@
       "Source": "GitHub",
       "RemoteType": "github",
       "RemoteHost": "api.github.com",
-      "RemoteRepo": "datathin",
       "RemoteUsername": "anna-neufeld",
-      "RemoteRef": "HEAD",
+      "RemoteRepo": "datathin",
+      "RemoteRef": "main",
       "RemoteSha": "58eb154609365fa7301ea0fa397fbf04dd8c28ed",
       "Requirements": [
         "R",
@@ -1194,7 +1230,7 @@
         "knitr",
         "mvtnorm"
       ],
-      "Hash": "ec5810daecbabba8473f7d6cc6169126"
+      "Hash": "176531b6bf79daada66910cacb6a9be9"
     },
     "datawizard": {
       "Package": "datawizard",
