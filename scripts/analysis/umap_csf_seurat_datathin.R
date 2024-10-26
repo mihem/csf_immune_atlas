@@ -15,7 +15,7 @@ library(datathin)
 library(abind)
 
 # source utility functions ----
-source("scripts/analysis/ml_izkf_utils.R")
+library(CSFAtlasTools)
 
 set.seed(123)
 my_cols <- unname(Polychrome::createPalette(100, pals::cols25()))

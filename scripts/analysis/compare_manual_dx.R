@@ -5,7 +5,7 @@ library(corrplot)
 library(RColorBrewer)
 library(qs)
 
-source("scripts/analysis/ml_izkf_utils.R")
+library(CSFAtlasTools)
 project <- "relative"
 
 # color palette ------------------------------------------

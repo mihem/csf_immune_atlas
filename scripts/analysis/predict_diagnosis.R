@@ -9,7 +9,7 @@ options(tidymodels.dark = TRUE)
 # tidymodels  ------------------------------------------
 # combined_complete <- qread(file.path("objects", "final_one_rel_combined_complete.qs"))
 combined <- qread(file.path("objects", "final_one_rel_combined.qs"))
-source("scripts/analysis/ml_izkf_utils.R")
+library(CSFAtlasTools)
 
 set.seed(123)
 my_cols <- unname(createPalette(100, RColorBrewer::brewer.pal(8, "Set2")))

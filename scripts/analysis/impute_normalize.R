@@ -14,7 +14,7 @@ all_data_one_fil <- qs::qread(file.path("objects", "final_one_rel.qs"))
 csf_data <- all_data_one_fil$csf
 blood_data <- all_data_one_fil$blood
 
-source("scripts/analysis/ml_izkf_utils.R")
+library(CSFAtlasTools)
 
 #csf
 csf_data_mice <- select(csf_data, dx_icd_level1:dx_andi_level3, patient_id:lactate, sex, age)

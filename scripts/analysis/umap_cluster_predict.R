@@ -15,7 +15,7 @@ options(tidymodels.dark = TRUE)
 seu_csf_train <- qread(file.path("objects", "seu_csf_train.qs"))
 seu_csf_test <- qread(file.path("objects", "seu_csf_test.qs"))
 
-source("scripts/analysis/ml_izkf_utils.R")
+library(CSFAtlasTools)
 
 # all data ----
 train_data <- as.data.frame(t(as.matrix(Seurat::GetAssayData(seu_csf_train, layer = "counts"))))

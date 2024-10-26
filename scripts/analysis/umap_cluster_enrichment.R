@@ -15,7 +15,7 @@ library(lme4)
 library(emmeans)
 
 # read in custom functions ----
-source("scripts/analysis/ml_izkf_utils.R")
+library(CSFAtlasTools)
 
 # custom colors
 my_cols <- unname(Polychrome::createPalette(300, RColorBrewer::brewer.pal(8, "Set2")))

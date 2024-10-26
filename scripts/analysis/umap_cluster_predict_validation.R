@@ -7,7 +7,7 @@ library(tidymodels)
 options(tidymodels.dark = TRUE)
 
 # source utility functions ----
-source("scripts/analysis/ml_izkf_utils.R")
+library(CSFAtlasTools)
 
 
 # load final xgb model ----
