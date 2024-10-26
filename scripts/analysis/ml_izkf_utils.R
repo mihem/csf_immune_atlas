@@ -93,11 +93,12 @@ ggsave(file.path("analysis", "relative", "abundance", glue::glue("dotplot_{data_
 
 }
 
-count_category <- function(data, category) {
-    data |>
-        dplyr::count(.data[[category]]) |>
-        dplyr::arrange(desc(n)) |>
-        readr::write_csv(file.path("analysis", "relative", "categories", glue::glue("count_{category}.csv")))
+count_category <- function(data, category, output_dir) {
+  file_path <- file.path(output_dir, glue::glue("count_{category}.csv"))
+  data |>
+    dplyr::count(.data[[category]]) |>
+    dplyr::arrange(dplyr::desc(n)) |>
+    readr::write_csv(file_path)
 }
 
 plot_category <- function(data, category, width, height, output_dir) {
@@ -519,7 +520,7 @@ corrPlot <- function(var, estimate_df, plot_df, output_dir) {
 
 
 # function for  wilcox test and algina keselman and penfield effect size (robust version of cohen's d)
-my_wilcox_test <- function(data, var) {
+wilcox_akp_test <- function(data, var) {
   my_formula <-  paste0(var, "~ sex")
   akp_effect <- WRS2::akp.effect(as.formula(my_formula), data = data)
   res <-  tidy(wilcox.test(as.formula(my_formula), data = data)) |>
@@ -672,7 +673,7 @@ stabilityBlood <- function(t, df, vars_cont, normal_estimate, ndim) {
 }
 
 
-TimePlot <- function(data, var, size, span) {
+timePlot <- function(data, var, size, span) {
     mean <- mean(data[[var]], na.rm = TRUE)
     plot <-
         data |>

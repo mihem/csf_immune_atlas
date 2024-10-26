@@ -8,14 +8,24 @@ library(qs)
 source("scripts/analysis/ml_izkf_utils.R")
 
 # color palette ---
-phmap_colors <- colorRampPalette(rev(brewer.pal(n = 8, name = "RdBu")))(100) #nice colors for pheatmap
+phmap_colors <- colorRampPalette(rev(brewer.pal(n = 8, name = "RdBu")))(100) # nice colors for pheatmap
 
 # read in final data for analysis -------
 combined_complete <- qread(file.path("objects", "final_one_rel_combined_complete.qs"))
 
 # count categories ------
 sel_categories <- c("dx_icd_level1", "dx_icd_level2")
-lapply(sel_categories, count_category, data = combined_complete)
+
+lapply(
+  sel_categories,
+  function(x) {
+    count_category(
+      category = x,
+      data = combined_complete,
+      output_dir = file.path("analysis", "relative", "categories")
+    )
+  }
+)
 
 plot_category(
   data = combined_complete,
