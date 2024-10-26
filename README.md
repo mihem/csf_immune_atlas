@@ -19,10 +19,10 @@ To ensure reproducibility, we used the *renv* package and Docker. To restore the
 renv::restore()
 ```
 
-To build the Docker image, use:
+To build the latest Docker image, use:
 
 ```bash
-docker pull mihem/csf_immune_atlas:1.0
+docker pull mihem/csf_immune_atlas:2.0
 ```
 
 
