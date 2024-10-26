@@ -152,7 +152,7 @@ ggplot(combined_complete, aes(sample = monos_CSF))+
   stat_qq_line()
 
 stat_sex_regress_ctrl <-
-  lapply(vars_cor, FUN = function(x) my_wilcox_test(data = combined_ctrl_regress_age, var = x)) |>
+  lapply(vars_cor, FUN = function(x) wilcox_akp_test(data = combined_ctrl_regress_age, var = x)) |>
   set_names(vars_cor) |>
   bind_rows(.id = "var")|>
   mutate(p_adjust = p.adjust(p.value, method = "BH", n = length(vars_cor))) |>
