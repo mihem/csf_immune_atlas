@@ -92,14 +92,14 @@
     },
     "CSFAtlasTools": {
       "Package": "CSFAtlasTools",
-      "Version": "1.0.0",
+      "Version": "2.0.0",
       "Source": "GitHub",
       "RemoteType": "github",
       "RemoteHost": "api.github.com",
       "RemoteUsername": "mihem",
       "RemoteRepo": "CSFAtlasTools",
       "RemoteRef": "main",
-      "RemoteSha": "fea0beb8d9980ab2e7a6b6472ff539efdefaa212",
+      "RemoteSha": "02d485896d383e2a876f0f3bbae7265c017e7e92",
       "Remotes": "anna-neufeld/datathin",
       "Requirements": [
         "RColorBrewer",
@@ -124,7 +124,7 @@
         "viridis",
         "yardstick"
       ],
-      "Hash": "cbbf43ed68932ef227cb506a03c5d8fb"
+      "Hash": "d74d190be1df5c93cda976ef7cf55c55"
     },
     "DBI": {
       "Package": "DBI",
