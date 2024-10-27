@@ -39,6 +39,8 @@ csf_data_threshold <-
     ) |>
     setNames(c("threshold_0", "threshold_300", "threshold_500", "threshold_1000"))
 
+qs::qsave(csf_data_threshold, file.path("objects", "csf_data_threshold.qs"))
+
 blood_data <-
     blood_data |>
     left_join(all_data_abs, join_by(file_stem_lukas1))
