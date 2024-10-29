@@ -242,3 +242,37 @@ lapply(
         )
     }
 )
+
+ # feature plot of measurements that are filtered with cd45 > 300 threshold
+ seu_csf_train <- qread(file.path("objects", "seu_csf_train.qs"))
+
+combined_complete_norm <- qs::qread(file.path("objects", "final_one_rel_combined_norm_complete.qs"))
+
+diff_0_300_id <- setdiff(csf_data_threshold$threshold_0$patient_id, csf_data_threshold$threshold_300$patient_id)
+
+# #one hot encoding for category
+# FPlot_dx <- function(dx, data) {
+# formula <- paste0(dx, "~", ".")
+# data_encode <- 
+#     data |>
+#     tidyr::drop_na(dx) |>
+#     recipes::recipe(as.formula(formula)) |>
+#     recipes::step_dummy(dx, one_hot = TRUE) |>
+#     recipes::prep() |>
+#     recipes::bake(new_data = NULL) |>
+#     mutate(across(starts_with(dx), function(x) factor(x, levels = c("1", "0")))) |>
+#     rename_with(function(x) str_remove(x, paste0(dx, "_")))
+# dx_levels <- dplyr::select(data_encode, cluster:length(data_encode)) |>
+#     select(-cluster) |>
+#     names()
+# plot <- lapply(dx_levels, FPlot, data = data_encode, scale = "cat", size = 0.1, alpha = 0.5)
+# patchwork::wrap_plots(plot, ncol = 4)
+# }
+
+# add patient id to seurat objects
+seu_csf_train$patient_id <- combined_complete_norm$patient_id
+
+seu_csf_train_diff <- subset(seu_csf_train, patient_id %in% diff_0_300_id) 
+
+DimPlot(seu_csf_train_diff, label = TRUE)
+ggsave(file.path("analysis", "relative", "umap", "umap_seurat_csf_norm_datathin_train_res_0.5_diff_0_300.pdf"), width = 8, height = 6)

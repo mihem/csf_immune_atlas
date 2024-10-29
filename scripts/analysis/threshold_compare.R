@@ -18,7 +18,7 @@ all_data_abs <- read_csv(file.path("gatenet", "absolute_saskia_v2.csv")) |>
         )
     ) |>
     rename(CD45_abs = `CD45+`) |>
-    select(file_stem_lukas1, file_stem_lukas2, CD45_abs) |>
+    dplyr::select(file_stem_lukas1, file_stem_lukas2, CD45_abs) |>
     mutate(file_stem_lukas2 = as.numeric(file_stem_lukas2))
 
 # add absolute data to csf
@@ -100,3 +100,11 @@ ggsave(
 csf_data_abs |>
     arrange(desc(NK)) |>
     select(patient_id, NK, CD45_abs)
+
+# extract patients in threshold 0 but not in threshold 300
+diff_0_300 <- setdiff(csf_data_threshold$threshold_0$file_name_lukas, csf_data_threshold$threshold_300$file_name_lukas)
+
+csf_data_threshold$threshold_0 |>
+    dplyr::filter(file_name_lukas %in% diff_0_300) |>
+    dplyr::select(file_name_lukas, pid, measure_date_orbis, birthdate_orbis) |>
+    writexl::write_xlsx("diff_0_300.xlsx")
