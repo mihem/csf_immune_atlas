@@ -45,22 +45,6 @@ blood_data <-
     blood_data |>
     left_join(all_data_abs, join_by(file_stem_lukas1))
 
-# analyze outlier
-blood_data |>
-    dplyr::filter(sample_pair_id == 10302) |>
-    select(CD45_abs, tissue, NK, NKT, T, B)
-
-all_data_one |>
-    dplyr::filter(sample_pair_id == 10302) |>
-    select(CD45_abs, tissue, lymphos:CD8)
-
-combined_complete_time_somatoform |>
-    dplyr::select(NK_blood, NK_CSF) |>
-    arrange(desc(NK_CSF))
-
-combined_complete_time_somatoform |>
-    arrange(desc(NK_blood)) |>
-    relocate(NK_blood, patient_id)
 
 # plot CSF
 csf_all_long <-
@@ -87,11 +71,12 @@ boxplot_threshold_csf <-
     csf_all_long |>
     ggplot(aes(x = threshold, y = value, fill = threshold)) +
     geom_boxplot() +
+    ylab("percentage") + 
     facet_wrap(vars(variable), scales = "free", ncol = 4) +
     theme_bw()
 
 ggsave(
-    file.path("analysis", "relative", "qc", "compare_thresholds_boxplot_csf.png"),
+    file.path("analysis", "relative", "qc", "compare_thresholds_boxplot_csf.pdf"),
     boxplot_threshold_csf,
     width = 15,
     height = 20

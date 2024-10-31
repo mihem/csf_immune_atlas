@@ -1,5 +1,4 @@
-
-# run UMAP csf using Seurat pipeline and datathin for splitting
+# run UMAP csf using Seurat pipeline and datathin for splitting using different thresholds
 
 # load libraries ----
 library(tidyverse)
@@ -21,7 +20,7 @@ library(CSFAtlasTools)
 set.seed(123)
 my_cols <- unname(Polychrome::createPalette(100, pals::cols25()))
 
-phmap_colors <- colorRampPalette(rev(brewer.pal(n = 8, name = "RdBu")))(100) #nice colors for pheatmap
+phmap_colors <- colorRampPalette(rev(brewer.pal(n = 8, name = "RdBu")))(100) # nice colors for pheatmap
 
 # read in prepared data for analysis ----
 # only keep those with CD45 threshold 500
@@ -36,16 +35,17 @@ fitdistrplus::descdist(combined_complete_norm$cell_count_CSF)
 # but for routine paramters weibull distribution fits better
 
 # check distribution in a qqplot ----
-weibull_fit_granulos_basic <- fitdistrplus::fitdist(combined_complete_norm$granulos_basic_CSF+1, "weibull", method = "mle")
+weibull_fit_granulos_basic <- fitdistrplus::fitdist(combined_complete_norm$granulos_basic_CSF + 1, "weibull", method = "mle")
 
-car::qqp(combined_complete_norm$B_CSF,
- "norm",
-  )
+car::qqp(
+    combined_complete_norm$B_CSF,
+    "norm",
+)
 
 car::qqp(combined_complete_norm$granulos_basic_CSF,
- "weibull",
- shape = weibull_fit_granulos_basic$estimate[1],
-  )
+    "weibull",
+    shape = weibull_fit_granulos_basic$estimate[1],
+)
 
 # prepare data for datathin splitting ---
 datathin_rows <- nrow(combined_complete_norm)
@@ -57,7 +57,7 @@ csf_vars_cont <-
     dplyr::select(-c(lymphos_basic_CSF:cell_count_CSF, OCB_CSF)) |>
     names()
 
-csf_vars_cat <- 
+csf_vars_cat <-
     combined_complete_norm |>
     dplyr::select(granulos_CSF:lactate_CSF) |>
     dplyr::select(matches("CSF|ratio")) |>
@@ -65,12 +65,14 @@ csf_vars_cat <-
     names()
 
 # fit normal distribution for cont vars ----
-norm_fit <- 
-    sapply(csf_vars_cont,
-    function(x) {
-        fit <- fitdistrplus::fitdist(combined_complete_norm[[x]], "norm", method = "mle")
-        fit$estimate[2]^2
-    }) |>
+norm_fit <-
+    sapply(
+        csf_vars_cont,
+        function(x) {
+            fit <- fitdistrplus::fitdist(combined_complete_norm[[x]], "norm", method = "mle")
+            fit$estimate[2]^2
+        }
+    ) |>
     setNames(csf_vars_cont)
 
 # create variance matrix in the same shape as data
@@ -81,12 +83,14 @@ variance_datathin <-
     )
 
 # fit weibull distribution for cont vars ----
-weibull_fit <- 
-    sapply(csf_vars_cat,
-    function(x) {
-        fit <- fitdistrplus::fitdist(combined_complete_norm[[x]] + 1, "weibull", method = "mle")
-        fit$estimate[1]
-    }) |>
+weibull_fit <-
+    sapply(
+        csf_vars_cat,
+        function(x) {
+            fit <- fitdistrplus::fitdist(combined_complete_norm[[x]] + 1, "weibull", method = "mle")
+            fit$estimate[1]
+        }
+    ) |>
     setNames(csf_vars_cat)
 
 weibull_datathin <-
@@ -110,17 +114,17 @@ data_thin2[1:10, 1:1, 1]
 data_thin[1:10, 1:33, 1]
 
 # split data into train and test ----
-data_train <- data_thin[,,1]
-data_test <- data_thin[,,2]
+data_train <- data_thin[, , 1]
+data_test <- data_thin[, , 2]
 colnames(data_train) <- c(csf_vars_cont, csf_vars_cat)
 colnames(data_test) <- c(csf_vars_cont, csf_vars_cat)
 
 # check if correlations are low ----
-cors <- sapply(1:ncol(data_train), function(u) round(cor(data_train[,u], data_test[,u]), 4))
+cors <- sapply(1:ncol(data_train), function(u) round(cor(data_train[, u], data_test[, u]), 4))
 
 # visualize data ----
-hist(data_train[,colnames(data_train) %in% "granulos_CSF"])
-hist(data_test[,colnames(data_test) %in% "granulos_CSF"])
+hist(data_train[, colnames(data_train) %in% "granulos_CSF"])
+hist(data_test[, colnames(data_test) %in% "granulos_CSF"])
 hist(as.matrix(combined_complete_norm[c("granulos_CSF")]))
 
 data_train |>
@@ -208,20 +212,20 @@ umap_csf <-
         panel.border = element_rect(color = "black", size = 1, fill = NA),
         aspect.ratio = 1,
         legend.position = "none"
-    ) 
+    )
 
 ggsave(plot = umap_csf, file.path("analysis", "relative", "umap", "umap_seurat_csf_norm_datathin_train_res_0.5_threshold_500.pdf"), width = 6, height = 6)
 
-#use SoupX to determine abundance in clusters ----
+# use SoupX to determine abundance in clusters ----
 combined_dx_icd_level2_matrix <-
-  combined_complete_norm |>
-  dplyr::select(dx_icd_level2) |>
-  recipes::recipe(dx_icd_level2 ~ .) |>
-  recipes::step_dummy(dx_icd_level2) |>
-  recipes::prep() |>
-  recipes::bake(new_data = NULL) |>
-  as.matrix() |>
-  t()
+    combined_complete_norm |>
+    dplyr::select(dx_icd_level2) |>
+    recipes::recipe(dx_icd_level2 ~ .) |>
+    recipes::step_dummy(dx_icd_level2) |>
+    recipes::prep() |>
+    recipes::bake(new_data = NULL) |>
+    as.matrix() |>
+    t()
 
 rownames(combined_dx_icd_level2_matrix) <- gsub(x = rownames(combined_dx_icd_level2_matrix), pattern = "\\.", replacement = " ")
 
@@ -243,36 +247,18 @@ lapply(
     }
 )
 
- # feature plot of measurements that are filtered with cd45 > 300 threshold
- seu_csf_train <- qread(file.path("objects", "seu_csf_train.qs"))
+# feature plot of measurements that are filtered with cd45 > 300 threshold
+seu_csf_train <- qread(file.path("objects", "seu_csf_train.qs"))
 
 combined_complete_norm <- qs::qread(file.path("objects", "final_one_rel_combined_norm_complete.qs"))
 
+# need to run csf_data_threshold first
 diff_0_300_id <- setdiff(csf_data_threshold$threshold_0$patient_id, csf_data_threshold$threshold_300$patient_id)
-
-# #one hot encoding for category
-# FPlot_dx <- function(dx, data) {
-# formula <- paste0(dx, "~", ".")
-# data_encode <- 
-#     data |>
-#     tidyr::drop_na(dx) |>
-#     recipes::recipe(as.formula(formula)) |>
-#     recipes::step_dummy(dx, one_hot = TRUE) |>
-#     recipes::prep() |>
-#     recipes::bake(new_data = NULL) |>
-#     mutate(across(starts_with(dx), function(x) factor(x, levels = c("1", "0")))) |>
-#     rename_with(function(x) str_remove(x, paste0(dx, "_")))
-# dx_levels <- dplyr::select(data_encode, cluster:length(data_encode)) |>
-#     select(-cluster) |>
-#     names()
-# plot <- lapply(dx_levels, FPlot, data = data_encode, scale = "cat", size = 0.1, alpha = 0.5)
-# patchwork::wrap_plots(plot, ncol = 4)
-# }
 
 # add patient id to seurat objects
 seu_csf_train$patient_id <- combined_complete_norm$patient_id
 
-seu_csf_train_diff <- subset(seu_csf_train, patient_id %in% diff_0_300_id) 
+seu_csf_train_diff <- subset(seu_csf_train, patient_id %in% diff_0_300_id)
 
 DimPlot(seu_csf_train_diff, label = TRUE)
 ggsave(file.path("analysis", "relative", "umap", "umap_seurat_csf_norm_datathin_train_res_0.5_diff_0_300.pdf"), width = 8, height = 6)
