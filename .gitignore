@@ -7,6 +7,7 @@
 !.gitignore
 !.renvignore
 !models/*
+!Dockerfile
 
 # ...even if they are in subdirectories
 !*/
