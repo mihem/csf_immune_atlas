@@ -18,8 +18,7 @@ To ensure reproducibility, we used the *renv* package and Docker. To restore the
 ```R
 renv::restore()
 ```
-
-To build the latest Docker image, use:
+Alternatively, you can also use the Docker image, which contain all necessary R packages and system dependencies. The Docker image is available on DockerHub:
 
 ```bash
 docker pull mihem/csf_immune_atlas:2.0
