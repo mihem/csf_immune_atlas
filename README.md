@@ -1,6 +1,7 @@
 # CSF Immune Atlas Code
-This repository contains the code used in the manuscript "Atlas of cerebrospinal fluid immune cells across neurological diseases".
-Published in ... DOI
+This repository contains the code used in the manuscript
+[Atlas of cerebrospinal fluid immune cells across neurological diseases](http://doi.org/10.1002/ana.27157)
+published in *Annals of Neurology* 2024.
 
 # Structure
 
