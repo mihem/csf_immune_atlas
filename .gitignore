@@ -2,21 +2,13 @@
 *
 
 # But not these files...
-!*.R
 !renv.lock
 !.gitignore
 !.renvignore
 !models/*
 !Dockerfile
+!scripts/analysis
+!scripts/preprocessing
 
 # ...even if they are in subdirectories
 !*/
-
-# if the files to be tracked are in subdirectories
-#!*/a/b/file1.txt
-#!*/a/b/c/*
-.Rproj.user
-old/
-all_lmds/
-scripts/preprocessing
-scripts/kknms
